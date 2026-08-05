@@ -95,7 +95,7 @@ export default async function AgentPage({
             label: "Prompt & qualification",
             content: (
               <Card description="The prompt is the agent's whole personality and script. Qualification criteria are what it has to come away knowing.">
-                <CoreConfigForm agent={agent} />
+                <CoreConfigForm key={agent.agent_id} agent={agent} />
               </Card>
             ),
           },
