@@ -11,6 +11,7 @@ import type {
   AllowedUser,
   CallLog,
   Department,
+  ExternalNumber,
   KnowledgeBaseEntry,
   Tool,
 } from "@/lib/types";
@@ -37,6 +38,7 @@ export type Database = {
       tools: TableDef<Tool, "tool_id">;
       call_logs: TableDef<CallLog, "call_log_id">;
       allowed_users: TableDef<AllowedUser, "email">;
+      external_numbers: TableDef<ExternalNumber, "external_number_id">;
     };
     Views: Record<never, never>;
     Functions: Record<never, never>;

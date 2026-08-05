@@ -16,13 +16,18 @@ import { removeNumberFromTrunks, syncNumberOntoTrunks } from "@/lib/livekit";
 import { db } from "@/lib/supabase";
 import {
   attachToSharedTrunk,
+  connectExternalNumber,
   detachFromSharedTrunk,
+  disconnectExternalNumber,
   purchaseNumber,
   releaseNumber,
   searchAvailableNumbers,
   type AvailableNumber,
 } from "@/lib/twilio";
 import { integrationStatus } from "@/lib/env";
+
+/** Twilio Account SIDs are always "AC" followed by 32 hex characters. */
+const TWILIO_ACCOUNT_SID = /^AC[a-f0-9]{32}$/i;
 
 /** Search results are returned to the client rather than persisted anywhere. */
 export type SearchState = ActionState & {
@@ -117,6 +122,131 @@ export async function buyNumber(
         ? `Bought ${phoneNumber} and assigned it.`
         : `Bought ${phoneNumber}. Assign it to an agent to start taking calls.`,
     );
+  });
+}
+
+/**
+ * Connects a number from a customer's own Twilio account -- the "bring your
+ * own Twilio" path, alongside buying one on the platform's account above.
+ *
+ * Nothing is charged here: the number is already theirs. This creates a
+ * dedicated trunk in *their* account pointed at the same LiveKit endpoint and
+ * moves their number onto it, then records the connection in Supabase, since
+ * Twilio has no cross-account listing to rediscover it from later.
+ */
+export async function connectNumber(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return guard(async () => {
+    const accountSid = str(form, "account_sid");
+    const authToken = str(form, "auth_token");
+    const phoneNumber = str(form, "phone_number");
+    const friendlyName = str(form, "friendly_name");
+    const agentId = optionalStr(form, "agent_id");
+
+    if (!TWILIO_ACCOUNT_SID.test(accountSid)) {
+      return fail('Account SID should look like "AC" followed by 32 characters.');
+    }
+    if (!authToken) return fail("Auth Token is required.");
+    if (!isE164(phoneNumber)) {
+      return fail("Expected an E.164 number like +15105550100.");
+    }
+
+    const connected = await connectExternalNumber({
+      accountSid,
+      authToken,
+      phoneNumber,
+      friendlyName: friendlyName || `Kodexo voice ${phoneNumber}`,
+    });
+
+    const { error } = await db().from("external_numbers").insert({
+      phone_number: connected.phoneNumber,
+      friendly_name: connected.friendlyName,
+      account_sid: accountSid,
+      auth_token: authToken,
+      number_sid: connected.sid,
+      trunk_sid: connected.trunkSid,
+    });
+    if (error) {
+      // The Twilio side already succeeded -- say so plainly rather than
+      // reporting failure for a number that's actually live and billable.
+      return fail(
+        `Connected ${phoneNumber} on Twilio, but couldn't save it here: ` +
+          `${error.message}. It's routing to LiveKit either way.`,
+      );
+    }
+
+    if (agentId) {
+      const assigned = await assignNumberToAgent(agentId, phoneNumber);
+      if (assigned.status === "error") {
+        return fail(
+          `Connected ${phoneNumber}, but couldn't assign it: ${assigned.message}`,
+        );
+      }
+    }
+
+    revalidatePath("/numbers");
+    revalidatePath("/agents");
+    return ok(
+      agentId
+        ? `Connected ${phoneNumber} and assigned it.`
+        : `Connected ${phoneNumber}. Assign it to an agent to start taking calls.`,
+    );
+  });
+}
+
+/**
+ * Undoes connectNumber: detaches the number from the trunk it was given (in
+ * the customer's own account) and forgets the connection here. The customer
+ * keeps the number -- there is no "release" for a number we never owned.
+ *
+ * Only takes the row ID from the form, not the stored credentials -- those
+ * are looked up here, server-side, so the Auth Token never has to round-trip
+ * through a hidden field in the rendered page.
+ */
+export async function disconnectExternalNumberAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return guard(async () => {
+    const externalNumberId = str(form, "external_number_id");
+    if (!externalNumberId) return fail("Missing number ID.");
+
+    const { data: row, error: fetchError } = await db()
+      .from("external_numbers")
+      .select("*")
+      .eq("external_number_id", externalNumberId)
+      .maybeSingle();
+    if (fetchError) return fail(fetchError.message);
+    if (!row) return fail("That connection no longer exists.");
+
+    await disconnectExternalNumber({
+      accountSid: row.account_sid,
+      authToken: row.auth_token,
+      numberSid: row.number_sid,
+      trunkSid: row.trunk_sid,
+    });
+
+    const { error: clearError } = await db()
+      .from("agents")
+      .update({ twilio_number: null })
+      .eq("twilio_number", row.phone_number);
+    if (clearError) {
+      return fail(
+        `Disconnected ${row.phone_number}, but couldn't clear its agent assignment: ${clearError.message}`,
+      );
+    }
+
+    const { error } = await db()
+      .from("external_numbers")
+      .delete()
+      .eq("external_number_id", externalNumberId);
+    if (error) return fail(`Disconnected on Twilio, but couldn't remove the row: ${error.message}`);
+
+    revalidatePath("/numbers");
+    revalidatePath("/agents");
+    return ok(`${row.phone_number} no longer routes to LiveKit.`);
   });
 }
 

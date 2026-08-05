@@ -237,3 +237,20 @@ export type AllowedUser = {
   email: string;
   created_at: string;
 };
+
+/**
+ * A number connected from a customer's own Twilio account -- see
+ * supabase/migrations/0010_external_numbers.sql. `account_sid`/`auth_token`
+ * are that Twilio account's credentials, kept so the number can later be
+ * disconnected (detached from the trunk this row created for it).
+ */
+export type ExternalNumber = {
+  external_number_id: string;
+  phone_number: string;
+  friendly_name: string;
+  account_sid: string;
+  auth_token: string;
+  number_sid: string;
+  trunk_sid: string;
+  created_at: string;
+};

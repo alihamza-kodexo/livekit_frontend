@@ -6,6 +6,7 @@ import type {
   CallLog,
   CallOutcome,
   Department,
+  ExternalNumber,
   KnowledgeBaseEntry,
   Tool,
 } from "@/lib/types";
@@ -164,4 +165,15 @@ export async function numberAssignments(): Promise<
   return new Map(
     rows.map(({ twilio_number, ...agent }) => [twilio_number, agent]),
   );
+}
+
+/** Numbers connected from customers' own Twilio accounts -- see 0010_external_numbers.sql. */
+export async function listExternalNumbers(): Promise<ExternalNumber[]> {
+  return (await expect(
+    db()
+      .from("external_numbers")
+      .select("*")
+      .order("created_at", { ascending: true }),
+    "listExternalNumbers",
+  )) as unknown as ExternalNumber[];
 }

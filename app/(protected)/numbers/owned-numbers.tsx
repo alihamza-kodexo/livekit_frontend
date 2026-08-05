@@ -6,6 +6,7 @@ import {
   assignNumber,
   attachNumber,
   detachNumber,
+  disconnectExternalNumberAction,
   releaseNumberAction,
 } from "@/app/(protected)/numbers/actions";
 import { ActionButton, ActionMessage } from "@/components/form";
@@ -14,9 +15,30 @@ import { IDLE } from "@/lib/forms";
 import type { AgentStatus } from "@/lib/types";
 import type { OwnedNumber } from "@/lib/twilio";
 
-export type NumberRow = OwnedNumber & {
-  assignedAgent: { agent_id: string; name: string; status: AgentStatus } | null;
+type AssignedAgent = { agent_id: string; name: string; status: AgentStatus } | null;
+
+/** A number bought on the platform's own Twilio account. */
+export type PlatformNumberRow = OwnedNumber & {
+  source: "platform";
+  assignedAgent: AssignedAgent;
 };
+
+/**
+ * A number connected from a customer's own Twilio account. Deliberately
+ * carries only `externalNumberId` and not the stored Account SID/Auth Token --
+ * those stay server-side; the disconnect action looks them up by ID.
+ */
+export type ExternalNumberRow = {
+  source: "external";
+  externalNumberId: string;
+  sid: string;
+  phoneNumber: string;
+  friendlyName: string;
+  trunkSid: string;
+  assignedAgent: AssignedAgent;
+};
+
+export type NumberRow = PlatformNumberRow | ExternalNumberRow;
 
 export function OwnedNumbers({
   numbers,
@@ -76,7 +98,9 @@ export function OwnedNumbers({
                     </div>
                   </Td>
                   <Td>
-                    {number.onSharedTrunk ? (
+                    {number.source === "external" ? (
+                      <Badge tone="green">connected (own trunk)</Badge>
+                    ) : number.onSharedTrunk ? (
                       <Badge tone="green">on shared trunk</Badge>
                     ) : number.trunkSid ? (
                       <Badge tone="amber">other trunk</Badge>
@@ -89,37 +113,49 @@ export function OwnedNumbers({
                   </Td>
                   <Td>
                     <div className="flex flex-wrap justify-end gap-2">
-                      {number.onSharedTrunk ? (
+                      {number.source === "external" ? (
                         <ActionButton
-                          action={detachNumber}
-                          label="Detach"
-                          confirm={`Stop routing ${number.phoneNumber} to LiveKit? Callers will stop reaching the agent, and any agent assignment is cleared. You keep the number.`}
-                          hidden={{
-                            number_sid: number.sid,
-                            phone_number: number.phoneNumber,
-                          }}
+                          action={disconnectExternalNumberAction}
+                          label="Disconnect"
+                          variant="danger"
+                          confirm={`Stop routing ${number.phoneNumber} to LiveKit? This removes it from this dashboard and detaches it from the trunk it was given. The Twilio account keeps the number itself.`}
+                          hidden={{ external_number_id: number.externalNumberId }}
                         />
                       ) : (
-                        <ActionButton
-                          action={attachNumber}
-                          label="Attach"
-                          variant="primary"
-                          hidden={{
-                            number_sid: number.sid,
-                            phone_number: number.phoneNumber,
-                          }}
-                        />
+                        <>
+                          {number.onSharedTrunk ? (
+                            <ActionButton
+                              action={detachNumber}
+                              label="Detach"
+                              confirm={`Stop routing ${number.phoneNumber} to LiveKit? Callers will stop reaching the agent, and any agent assignment is cleared. You keep the number.`}
+                              hidden={{
+                                number_sid: number.sid,
+                                phone_number: number.phoneNumber,
+                              }}
+                            />
+                          ) : (
+                            <ActionButton
+                              action={attachNumber}
+                              label="Attach"
+                              variant="primary"
+                              hidden={{
+                                number_sid: number.sid,
+                                phone_number: number.phoneNumber,
+                              }}
+                            />
+                          )}
+                          <ActionButton
+                            action={releaseNumberAction}
+                            label="Release"
+                            variant="danger"
+                            confirm={`Release ${number.phoneNumber} back to Twilio? This is permanent — the number returns to the public pool and cannot be reclaimed.`}
+                            hidden={{
+                              number_sid: number.sid,
+                              phone_number: number.phoneNumber,
+                            }}
+                          />
+                        </>
                       )}
-                      <ActionButton
-                        action={releaseNumberAction}
-                        label="Release"
-                        variant="danger"
-                        confirm={`Release ${number.phoneNumber} back to Twilio? This is permanent — the number returns to the public pool and cannot be reclaimed.`}
-                        hidden={{
-                          number_sid: number.sid,
-                          phone_number: number.phoneNumber,
-                        }}
-                      />
                     </div>
                   </Td>
                 </tr>

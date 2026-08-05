@@ -1,3 +1,4 @@
+import { ConnectNumber } from "@/app/(protected)/numbers/connect-number";
 import { NumberSearch } from "@/app/(protected)/numbers/number-search";
 import { OwnedNumbers, type NumberRow } from "@/app/(protected)/numbers/owned-numbers";
 import {
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui";
 import { integrationStatus } from "@/lib/env";
 import { describeSipConfig } from "@/lib/livekit";
-import { listAgents, numberAssignments } from "@/lib/queries";
+import { listAgents, listExternalNumbers, numberAssignments } from "@/lib/queries";
 import { describeSharedTrunk, listOwnedNumbers } from "@/lib/twilio";
 
 export default async function NumbersPage() {
@@ -51,18 +52,20 @@ export default async function NumbersPage() {
     );
   }
 
-  const [agents, assignments, numbersResult, trunkResult] = await Promise.all([
-    listAgents(),
-    numberAssignments(),
-    listOwnedNumbers().then(
-      (data) => ({ ok: true as const, data }),
-      (error: unknown) => ({ ok: false as const, error }),
-    ),
-    describeSharedTrunk().then(
-      (data) => ({ ok: true as const, data }),
-      (error: unknown) => ({ ok: false as const, error }),
-    ),
-  ]);
+  const [agents, assignments, externalNumbers, numbersResult, trunkResult] =
+    await Promise.all([
+      listAgents(),
+      numberAssignments(),
+      listExternalNumbers(),
+      listOwnedNumbers().then(
+        (data) => ({ ok: true as const, data }),
+        (error: unknown) => ({ ok: false as const, error }),
+      ),
+      describeSharedTrunk().then(
+        (data) => ({ ok: true as const, data }),
+        (error: unknown) => ({ ok: false as const, error }),
+      ),
+    ]);
 
   const agentOptions = agents.map((agent) => ({
     agent_id: agent.agent_id,
@@ -83,14 +86,30 @@ export default async function NumbersPage() {
     );
   }
 
-  const rows: NumberRow[] = numbersResult.data.map((number) => ({
-    ...number,
-    assignedAgent: assignments.get(number.phoneNumber) ?? null,
-  }));
+  const rows: NumberRow[] = [
+    ...numbersResult.data.map((number) => ({
+      ...number,
+      source: "platform" as const,
+      assignedAgent: assignments.get(number.phoneNumber) ?? null,
+    })),
+    ...externalNumbers.map((number) => ({
+      source: "external" as const,
+      externalNumberId: number.external_number_id,
+      sid: number.number_sid,
+      phoneNumber: number.phone_number,
+      friendlyName: number.friendly_name,
+      trunkSid: number.trunk_sid,
+      assignedAgent: assignments.get(number.phone_number) ?? null,
+    })),
+  ];
 
-  // Numbers assigned in Supabase that Twilio doesn't list. Usually a number
-  // released outside the dashboard — the agent looks configured but can't ring.
-  const owned = new Set(numbersResult.data.map((n) => n.phoneNumber));
+  // Numbers assigned in Supabase that Twilio doesn't list and that aren't a
+  // connected external number either. Usually a number released outside the
+  // dashboard — the agent looks configured but can't ring.
+  const owned = new Set([
+    ...numbersResult.data.map((n) => n.phoneNumber),
+    ...externalNumbers.map((n) => n.phone_number),
+  ]);
   const orphaned = [...assignments.entries()].filter(([number]) => !owned.has(number));
 
   return (
@@ -131,18 +150,27 @@ export default async function NumbersPage() {
         )}
       </Card>
 
-      <Card
-        title="Buy a new number"
-        description="Purchasing charges the Twilio account immediately. Each result is confirmed individually before anything is bought."
-      >
-        {agentOptions.length === 0 ? (
-          <EmptyState
-            title="Create an agent first"
-            description="A number needs an agent to answer it. You can still buy one unassigned, but nothing will pick up."
-          />
-        ) : null}
-        <NumberSearch agents={agentOptions} />
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card
+          title="Buy a new number"
+          description="Purchasing charges the Twilio account immediately. Each result is confirmed individually before anything is bought."
+        >
+          {agentOptions.length === 0 ? (
+            <EmptyState
+              title="Create an agent first"
+              description="A number needs an agent to answer it. You can still buy one unassigned, but nothing will pick up."
+            />
+          ) : null}
+          <NumberSearch agents={agentOptions} />
+        </Card>
+
+        <Card
+          title="Connect a Twilio number you already own"
+          description="Bring your own Twilio number with its Account SID and Auth Token — nothing is purchased, this just routes an existing number to LiveKit."
+        >
+          <ConnectNumber agents={agentOptions} />
+        </Card>
+      </div>
 
       <Card
         title="Routing status"
