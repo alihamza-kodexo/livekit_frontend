@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@livekit/components-styles";
 import {
   BarVisualizer,
@@ -33,7 +33,7 @@ export function TestAgentPanel({ agentId }: { agentId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
-  async function start() {
+  const start = useCallback(async () => {
     setError(null);
     setStarting(true);
     const result = await createTestSession(agentId);
@@ -43,7 +43,17 @@ export function TestAgentPanel({ agentId }: { agentId: string }) {
       return;
     }
     setSession(result);
-  }
+  }, [agentId]);
+
+  // The only way to reach this panel is the header's "Test agent" button
+  // (there's no tab for it anymore), so that click should actually start the
+  // call -- landing here and still requiring a second click felt broken.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current) return;
+    autoStarted.current = true;
+    start();
+  }, [start]);
 
   return (
     <div className="space-y-3">

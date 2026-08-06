@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
+  Badge,
   ButtonLink,
   Card,
   Duration,
@@ -34,8 +35,21 @@ export default async function CallDetailPage({
           <Detail label="When">
             <Timestamp value={call.created_at} />
           </Detail>
+          <Detail label="Source">
+            {call.is_test ? (
+              <Badge tone="blue">Web call</Badge>
+            ) : (
+              "Phone call"
+            )}
+          </Detail>
           <Detail label="Caller">
-            {call.caller_number ? <Mono>{call.caller_number}</Mono> : "unknown"}
+            {call.is_test ? (
+              <span className="text-zinc-400">no phone number — browser test</span>
+            ) : call.caller_number ? (
+              <Mono>{call.caller_number}</Mono>
+            ) : (
+              "unknown"
+            )}
           </Detail>
           <Detail label="Duration">
             <Duration seconds={call.duration_seconds} />

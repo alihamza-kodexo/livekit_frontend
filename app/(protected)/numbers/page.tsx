@@ -1,9 +1,9 @@
 import { ConnectNumber } from "@/app/(protected)/numbers/connect-number";
-import { NumberSearch } from "@/app/(protected)/numbers/number-search";
 import { OwnedNumbers, type NumberRow } from "@/app/(protected)/numbers/owned-numbers";
 import {
   Card,
   Code,
+  CollapsibleCard,
   ConfigNotice,
   EmptyState,
   ErrorNotice,
@@ -86,22 +86,21 @@ export default async function NumbersPage() {
     );
   }
 
-  const rows: NumberRow[] = [
-    ...numbersResult.data.map((number) => ({
-      ...number,
-      source: "platform" as const,
-      assignedAgent: assignments.get(number.phoneNumber) ?? null,
-    })),
-    ...externalNumbers.map((number) => ({
-      source: "external" as const,
-      externalNumberId: number.external_number_id,
-      sid: number.number_sid,
-      phoneNumber: number.phone_number,
-      friendlyName: number.friendly_name,
-      trunkSid: number.trunk_sid,
-      assignedAgent: assignments.get(number.phone_number) ?? null,
-    })),
-  ];
+  const platformRows: NumberRow[] = numbersResult.data.map((number) => ({
+    ...number,
+    source: "platform" as const,
+    assignedAgent: assignments.get(number.phoneNumber) ?? null,
+  }));
+
+  const externalRows: NumberRow[] = externalNumbers.map((number) => ({
+    source: "external" as const,
+    externalNumberId: number.external_number_id,
+    sid: number.number_sid,
+    phoneNumber: number.phone_number,
+    friendlyName: number.friendly_name,
+    trunkSid: number.trunk_sid,
+    assignedAgent: assignments.get(number.phone_number) ?? null,
+  }));
 
   // Numbers assigned in Supabase that Twilio doesn't list and that aren't a
   // connected external number either. Usually a number released outside the
@@ -116,7 +115,7 @@ export default async function NumbersPage() {
     <>
       <PageHeader
         title="Numbers"
-        description="Buy numbers, route them through the shared SIP trunk, and pick which agent answers each one."
+        description="Route numbers through the shared SIP trunk and pick which agent answers each one."
       />
 
       {orphaned.length > 0 && (
@@ -130,47 +129,48 @@ export default async function NumbersPage() {
             ))}
           </ul>
           <p className="mt-2">
-            Those agents will never receive a call. Either buy the number back or
-            clear the assignment on the agent.
+            Those agents will never receive a call. Either reattach or reconnect
+            the number, or clear the assignment on the agent.
           </p>
         </ErrorNotice>
       )}
 
-      <Card
-        title="Numbers on this account"
-        description="Attach routes a number out through the shared trunk to LiveKit. The agent that answers is decided here, not in Twilio."
-      >
-        {rows.length === 0 ? (
-          <EmptyState
-            title="No numbers yet"
-            description="Search Twilio below to buy the first one."
-          />
-        ) : (
-          <OwnedNumbers numbers={rows} agents={agentOptions} />
-        )}
-      </Card>
-
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card
-          title="Buy a new number"
-          description="Purchasing charges the Twilio account immediately. Each result is confirmed individually before anything is bought."
+        <CollapsibleCard
+          title={`This Twilio account (${platformRows.length})`}
+          description="Attach routes a number out through the shared trunk to LiveKit. The agent that answers is decided here, not in Twilio."
         >
-          {agentOptions.length === 0 ? (
+          {platformRows.length === 0 ? (
             <EmptyState
-              title="Create an agent first"
-              description="A number needs an agent to answer it. You can still buy one unassigned, but nothing will pick up."
+              title="No numbers yet"
+              description="Connect one below to get started."
             />
-          ) : null}
-          <NumberSearch agents={agentOptions} />
-        </Card>
+          ) : (
+            <OwnedNumbers numbers={platformRows} agents={agentOptions} />
+          )}
+        </CollapsibleCard>
 
-        <Card
-          title="Connect a Twilio number you already own"
-          description="Bring your own Twilio number with its Account SID and Auth Token — nothing is purchased, this just routes an existing number to LiveKit."
+        <CollapsibleCard
+          title={`Connected from other Twilio accounts (${externalRows.length})`}
+          description="Each of these keeps its own dedicated trunk in the customer's Twilio account, pointed at the same LiveKit endpoint."
         >
-          <ConnectNumber agents={agentOptions} />
-        </Card>
+          {externalRows.length === 0 ? (
+            <EmptyState
+              title="Nothing connected yet"
+              description="Use the form below to bring in a number from a customer's own Twilio account."
+            />
+          ) : (
+            <OwnedNumbers numbers={externalRows} agents={agentOptions} />
+          )}
+        </CollapsibleCard>
       </div>
+
+      <Card
+        title="Connect a Twilio number you already own"
+        description="Bring your own Twilio number with its Account SID and Auth Token — this just routes an existing number to LiveKit."
+      >
+        <ConnectNumber agents={agentOptions} />
+      </Card>
 
       <Card
         title="Routing status"

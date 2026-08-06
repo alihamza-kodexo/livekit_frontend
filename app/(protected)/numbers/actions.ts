@@ -6,7 +6,6 @@ import {
   fail,
   guard,
   isE164,
-  num,
   ok,
   optionalStr,
   str,
@@ -19,120 +18,20 @@ import {
   connectExternalNumber,
   detachFromSharedTrunk,
   disconnectExternalNumber,
-  purchaseNumber,
   releaseNumber,
-  searchAvailableNumbers,
-  type AvailableNumber,
 } from "@/lib/twilio";
 import { integrationStatus } from "@/lib/env";
 
 /** Twilio Account SIDs are always "AC" followed by 32 hex characters. */
 const TWILIO_ACCOUNT_SID = /^AC[a-f0-9]{32}$/i;
 
-/** Search results are returned to the client rather than persisted anywhere. */
-export type SearchState = ActionState & {
-  results?: AvailableNumber[];
-  /** Echoed back so the form keeps showing what was searched for. */
-  query?: { country: string; areaCode: string; contains: string };
-};
-
-export async function searchNumbers(
-  _prev: SearchState,
-  form: FormData,
-): Promise<SearchState> {
-  const country = (str(form, "country") || "US").toUpperCase();
-  const areaCodeRaw = str(form, "area_code");
-  const contains = str(form, "contains");
-  const query = { country, areaCode: areaCodeRaw, contains };
-
-  const result = await guard<SearchState>(async () => {
-    if (!/^[A-Z]{2}$/.test(country)) {
-      return fail("Country must be a two-letter ISO code, e.g. US or GB.");
-    }
-    const areaCode = num(form, "area_code");
-    if (areaCodeRaw && areaCode === null) {
-      return fail("Area code must be a number.");
-    }
-
-    const results = await searchAvailableNumbers({
-      country,
-      ...(areaCode !== null ? { areaCode } : {}),
-      ...(contains ? { contains } : {}),
-    });
-
-    if (results.length === 0) {
-      return fail("Twilio has nothing matching that search. Try a wider filter.");
-    }
-    return { ...ok(`${results.length} available.`), results };
-  });
-
-  return { ...result, query };
-}
-
-/**
- * Buys a number, puts it on the shared SIP trunk, and optionally assigns it to
- * an agent — the "add a new number" path.
- *
- * This spends money on the Twilio account, so the UI gates it behind an explicit
- * per-number confirmation.
- */
-export async function buyNumber(
-  _prev: ActionState,
-  form: FormData,
-): Promise<ActionState> {
-  return guard(async () => {
-    const phoneNumber = str(form, "phone_number");
-    if (!isE164(phoneNumber)) {
-      return fail("Expected an E.164 number like +15105550100.");
-    }
-
-    const agentId = optionalStr(form, "agent_id");
-    const label = str(form, "friendly_name") || `Kodexo voice ${phoneNumber}`;
-
-    const purchased = await purchaseNumber(phoneNumber, label);
-
-    if (!purchased.onSharedTrunk) {
-      // Twilio accepted the purchase but didn't route it to the trunk. The
-      // number is now billable, so say so plainly instead of reporting success.
-      return fail(
-        `Bought ${phoneNumber}, but it did not attach to the shared SIP trunk. ` +
-          `It is on the account and billable — attach it below before using it.`,
-      );
-    }
-
-    // Only matters for trunks locked to an explicit DID allowlist; a catch-all
-    // trunk needs no LiveKit change at all.
-    if (integrationStatus().livekit) {
-      await syncNumberOntoTrunks(phoneNumber);
-    }
-
-    if (agentId) {
-      const assigned = await assignNumberToAgent(agentId, phoneNumber);
-      if (assigned.status === "error") {
-        return fail(
-          `Bought and attached ${phoneNumber}, but couldn't assign it: ${assigned.message}`,
-        );
-      }
-    }
-
-    revalidatePath("/numbers");
-    revalidatePath("/agents");
-    return ok(
-      agentId
-        ? `Bought ${phoneNumber} and assigned it.`
-        : `Bought ${phoneNumber}. Assign it to an agent to start taking calls.`,
-    );
-  });
-}
-
 /**
  * Connects a number from a customer's own Twilio account -- the "bring your
- * own Twilio" path, alongside buying one on the platform's account above.
- *
- * Nothing is charged here: the number is already theirs. This creates a
- * dedicated trunk in *their* account pointed at the same LiveKit endpoint and
- * moves their number onto it, then records the connection in Supabase, since
- * Twilio has no cross-account listing to rediscover it from later.
+ * own Twilio" path. Nothing is charged here: the number already exists on
+ * their account. This creates a dedicated trunk in *their* account pointed at
+ * the same LiveKit endpoint and moves their number onto it, then records the
+ * connection in Supabase, since Twilio has no cross-account listing to
+ * rediscover it from later.
  */
 export async function connectNumber(
   _prev: ActionState,

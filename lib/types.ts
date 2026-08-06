@@ -180,6 +180,18 @@ export type Agent = {
   conversation_settings: ConversationSettings;
   /** Null means "use the worker's default end-of-call guidance" -- see BuiltinTools' end_call entry. */
   end_call_instructions: string | null;
+  /** Free-form reference text for off-topic questions -- exposed to the model
+   * as a single on-demand tool rather than concatenated into every turn's
+   * prompt, so it only costs tokens on the calls that actually need it. */
+  knowledge_base_content: string;
+  /** Model-facing summary of what knowledge_base_content covers -- this, not
+   * the content itself, is what the model sees to decide whether to look it up. */
+  knowledge_base_description: string;
+  /** Posted the full call record (transcript, outcome, lead info) once the
+   * call ends. Null means "don't send". No recording pipeline exists yet, so
+   * the posted payload's recording_url is always null too -- see
+   * agent-worker's notify.send_end_call_webhook. */
+  end_call_webhook_url: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -194,17 +206,11 @@ export type Department = {
   updated_at: string;
 };
 
-export type KnowledgeBaseEntry = {
-  kb_id: string;
-  agent_id: string;
-  title: string;
-  content: string;
-  updated_at: string;
-};
-
+/** Global now -- the same tool can be selected by more than one agent via
+ * the `agent_tools` join table (see 0014_global_tools.sql), rather than
+ * belonging to exactly one. */
 export type Tool = {
   tool_id: string;
-  agent_id: string;
   name: string;
   description: string;
   /** JSON Schema for the tool's arguments, passed to DeepSeek function calling. */
@@ -213,6 +219,13 @@ export type Tool = {
   is_builtin: boolean;
   created_at: string;
   updated_at: string;
+};
+
+/** One row of the `agent_tools` join table -- which global tool an agent has selected. */
+export type AgentToolLink = {
+  agent_id: string;
+  tool_id: string;
+  created_at: string;
 };
 
 export type CallLog = {
@@ -229,6 +242,8 @@ export type CallLog = {
   lead_name: string | null;
   lead_company: string | null;
   lead_need: string | null;
+  /** True for a dashboard "Test agent" browser session -- no phone number or Twilio call involved. */
+  is_test: boolean;
   created_at: string;
 };
 

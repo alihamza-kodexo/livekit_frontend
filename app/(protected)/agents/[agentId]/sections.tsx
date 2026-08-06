@@ -1,32 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import {
+  attachTool,
   deleteAgent,
-  deleteKnowledgeEntry,
-  deleteTool,
+  detachTool,
   saveDepartments,
-  saveKnowledgeEntry,
-  saveTool,
   updateAgentCore,
+  updateAgentKnowledgeBase,
   updateAgentVoice,
 } from "@/app/(protected)/agents/actions";
 import { ActionButton, ActionForm } from "@/components/form";
 import { RepeatableRows } from "@/components/repeatable-rows";
-import { ToolParameterBuilder } from "@/components/tool-parameter-builder";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { VoicePicker } from "@/components/voice-picker";
-import type {
-  Agent,
-  AgentStatus,
-  Department,
-  FirstMessageMode,
-  KnowledgeBaseEntry,
-  LLMProvider,
-  Tool,
-} from "@/lib/types";
+import type { Agent, Department, FirstMessageMode, LLMProvider, Tool } from "@/lib/types";
 import {
-  AGENT_STATUSES,
   BUILTIN_TOOLS,
   CONVERSATION_SETTING_DEFAULTS,
   FIRST_MESSAGE_MODES,
@@ -44,12 +34,6 @@ const LLM_PROVIDER_TOOLTIPS: Record<LLMProvider, string> = {
   groq: "Fast responses via Llama 3.3 70B on Groq's LPU hardware. Best default for natural call latency.",
   deepseek: "Cheaper per output token than Groq, but DeepSeek's API adds roughly 1.5s of extra latency per turn -- noticeable to callers.",
   gemini_live: "Google's realtime speech-to-speech model. Skips separate STT/TTS entirely, so it's the cheapest option -- but it can't use the pronunciation dictionary or most tuning settings below.",
-};
-
-const AGENT_STATUS_TOOLTIPS: Record<AgentStatus, string> = {
-  draft: "Not live. Safe to leave incomplete -- won't answer calls even if a number is assigned.",
-  paused: "Temporarily off. Callers to an assigned number hear the number's fallback instead of this agent.",
-  active: "Live. Answers real calls on any number assigned to this agent. Requires a system prompt below.",
 };
 
 const FIRST_MESSAGE_LABELS: Record<FirstMessageMode, string> = {
@@ -79,33 +63,11 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
   return (
     <ActionForm action={updateAgentCore} pendingLabel="Saving…">
       <input type="hidden" name="agent_id" value={agent.agent_id} />
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Persona name" htmlFor="agent-name" badge="required">
-          <Input id="agent-name" name="name" defaultValue={agent.name} required />
-        </Field>
-        <Field
-          label="Status"
-          htmlFor="agent-status"
-          badge="required"
-          hint={
-            <>
-              Only active agents answer calls. Paused sends callers to the
-              number&apos;s fallback. Setting this to &ldquo;active&rdquo;
-              requires a system prompt below — saving without one keeps the
-              agent as draft and the message under Save will say why.
-            </>
-          }
-        >
-          <Select id="agent-status" name="status" defaultValue={agent.status}>
-            {AGENT_STATUSES.map((status) => (
-              <option key={status} value={status} title={AGENT_STATUS_TOOLTIPS[status]}>
-                {status}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+      {/* Persona name/status now edit from the sticky header (see
+          identity-form.tsx) -- carried here unchanged so this form's own
+          full-row save doesn't overwrite whatever's set there. */}
+      <input type="hidden" name="name" value={agent.name} />
+      <input type="hidden" name="status" value={agent.status} />
 
       <fieldset className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
         <legend className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
@@ -219,6 +181,19 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
             rows={3}
             defaultValue={agent.end_call_instructions ?? ""}
             placeholder="End once qualification is complete and there's nothing further to discuss."
+          />
+        </Field>
+        <Field
+          label="End-call webhook URL"
+          htmlFor="end-call-webhook-url"
+          badge="optional"
+          hint="Posts the full call record -- transcript, outcome, lead info -- to this URL right after the call ends. Fires for test calls too, not just real ones. There's no call recording yet, so the payload's recording_url is always null."
+        >
+          <Input
+            id="end-call-webhook-url"
+            name="end_call_webhook_url"
+            defaultValue={agent.end_call_webhook_url ?? ""}
+            placeholder="https://n8n.example.com/webhook/call-ended"
           />
         </Field>
       </fieldset>
@@ -480,57 +455,46 @@ export function DepartmentsForm({
 /* Knowledge base                                                             */
 /* -------------------------------------------------------------------------- */
 
-export function KnowledgeEntryForm({
-  agentId,
-  entry,
-}: {
-  agentId: string;
-  entry?: KnowledgeBaseEntry;
-}) {
-  const suffix = entry?.kb_id ?? "new";
+/**
+ * One knowledge base per agent, exposed to the model as a single on-demand
+ * tool (see agent-worker/src/worker/tools.py build_knowledge_tool) instead of
+ * being concatenated into every turn's prompt -- knowledge_base_description
+ * is what the model actually reads to decide whether to look it up, so its
+ * content only costs tokens on the calls that actually need it.
+ */
+export function KnowledgeBaseForm({ agent }: { agent: Agent }) {
   return (
-    <div className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-      <ActionForm
-        action={saveKnowledgeEntry}
-        submitLabel={entry ? "Update entry" : "Add entry"}
-        pendingLabel="Saving…"
-        footer={
-          entry ? (
-            <ActionButton
-              action={deleteKnowledgeEntry}
-              label="Delete"
-              variant="danger"
-              confirm={`Delete the knowledge base entry "${entry.title}"?`}
-              hidden={{ agent_id: agentId, kb_id: entry.kb_id }}
-            />
-          ) : undefined
-        }
+    <ActionForm action={updateAgentKnowledgeBase} pendingLabel="Saving…">
+      <input type="hidden" name="agent_id" value={agent.agent_id} />
+      <Field
+        label="When to use it"
+        htmlFor="kb-description"
+        badge="required to activate"
+        hint="Written for the model, not for a person -- a short summary of what this covers, so it knows when a caller's question is worth looking up here."
       >
-        <input type="hidden" name="agent_id" value={agentId} />
-        {entry && <input type="hidden" name="kb_id" value={entry.kb_id} />}
-        <Field label="Title" htmlFor={`kb-title-${suffix}`} badge="required">
-          <Input
-            id={`kb-title-${suffix}`}
-            name="title"
-            defaultValue={entry?.title ?? ""}
-            placeholder="What does Kodexo Labs build?"
-          />
-        </Field>
-        <Field
-          label="Answer"
-          htmlFor={`kb-content-${suffix}`}
-          badge="required"
-          hint="The agent reads from this when a caller goes off-script, then returns to the flow."
-        >
-          <Textarea
-            id={`kb-content-${suffix}`}
-            name="content"
-            rows={5}
-            defaultValue={entry?.content ?? ""}
-          />
-        </Field>
-      </ActionForm>
-    </div>
+        <Textarea
+          id="kb-description"
+          name="knowledge_base_description"
+          rows={2}
+          defaultValue={agent.knowledge_base_description}
+          placeholder="Company info, pricing, and policies -- use this for anything off-script that isn't covered by the qualification flow."
+        />
+      </Field>
+      <Field
+        label="Knowledge base content"
+        htmlFor="kb-content"
+        badge="optional"
+        hint="Paste everything the agent might need for off-topic questions. Only sent to the model on the calls where it actually decides to look it up."
+      >
+        <Textarea
+          id="kb-content"
+          name="knowledge_base_content"
+          rows={16}
+          defaultValue={agent.knowledge_base_content}
+          placeholder="Paste FAQs, policies, pricing -- anything the agent should be able to answer from."
+        />
+      </Field>
+    </ActionForm>
   );
 }
 
@@ -584,95 +548,80 @@ export function BuiltinTools() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Tools                                                                      */
+/* Tools -- global library, this agent just picks which ones it uses         */
 /* -------------------------------------------------------------------------- */
 
-export function ToolForm({
+function toolParamCount(tool: Tool): number {
+  const properties = tool.parameter_schema?.properties;
+  return properties && typeof properties === "object" && !Array.isArray(properties)
+    ? Object.keys(properties).length
+    : 0;
+}
+
+/** Every tool lives in the shared library at /tools now (see 0014_global_tools.sql)
+ * -- this just lets an agent select which ones it uses, via the agent_tools
+ * join table, instead of authoring a tool's own definition per agent. */
+export function AgentToolsPanel({
   agentId,
-  tool,
+  allTools,
+  selectedToolIds,
 }: {
   agentId: string;
-  tool?: Tool;
+  allTools: Tool[];
+  selectedToolIds: Set<string>;
 }) {
-  const suffix = tool?.tool_id ?? "new";
   return (
-    <div className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-      <ActionForm
-        action={saveTool}
-        submitLabel={tool ? "Update tool" : "Add tool"}
-        pendingLabel="Saving…"
-        footer={
-          tool ? (
+    <div className="space-y-2">
+      {allTools.length === 0 && (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          No tools in the library yet --{" "}
+          <Link href="/tools" className="text-blue-600 hover:underline dark:text-blue-400">
+            create one
+          </Link>{" "}
+          first, then come back here to attach it.
+        </p>
+      )}
+      {allTools.map((tool) => {
+        const attached = selectedToolIds.has(tool.tool_id);
+        return (
+          <div
+            key={tool.tool_id}
+            className="flex flex-wrap items-center gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+          >
+            <span
+              aria-hidden
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-500 text-xs font-bold text-white"
+            >
+              ƒ
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  {tool.name}
+                </span>
+                <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  {toolParamCount(tool)} param{toolParamCount(tool) === 1 ? "" : "s"}
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                {tool.description}
+              </p>
+            </div>
             <ActionButton
-              action={deleteTool}
-              label="Delete"
-              variant="danger"
-              confirm={`Delete the tool "${tool.name}"? The agent will stop being able to call it.`}
+              action={attached ? detachTool : attachTool}
+              label={attached ? "Detach" : "Attach"}
+              variant={attached ? "danger" : "secondary"}
               hidden={{ agent_id: agentId, tool_id: tool.tool_id }}
             />
-          ) : undefined
-        }
+          </div>
+        );
+      })}
+      <Link
+        href="/tools"
+        className="inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
       >
-        <input type="hidden" name="agent_id" value={agentId} />
-        {tool && <input type="hidden" name="tool_id" value={tool.tool_id} />}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            label="Tool name"
-            htmlFor={`tool-name-${suffix}`}
-            badge="required"
-            hint="Identifier-safe. This is the function name the model calls."
-          >
-            <Input
-              id={`tool-name-${suffix}`}
-              name="name"
-              defaultValue={tool?.name ?? ""}
-              placeholder="book_calendar_slot"
-            />
-          </Field>
-          <Field
-            label="n8n webhook URL"
-            htmlFor={`tool-webhook-${suffix}`}
-            badge="required"
-            hint="Called with the tool's arguments as JSON; its response goes back into the conversation."
-          >
-            <Input
-              id={`tool-webhook-${suffix}`}
-              name="webhook_url"
-              defaultValue={tool?.webhook_url ?? ""}
-              placeholder="https://n8n.example.com/webhook/book-slot"
-            />
-          </Field>
-        </div>
-
-        <Field
-          label="When to use it"
-          htmlFor={`tool-description-${suffix}`}
-          badge="required"
-          hint="Written for the model, not for a person — this is the only thing it uses to decide whether to call the tool."
-        >
-          <Textarea
-            id={`tool-description-${suffix}`}
-            name="description"
-            rows={3}
-            defaultValue={tool?.description ?? ""}
-            placeholder="This description will be used by the model to call the tools, you dont have to mention tools in the agent prompt!"
-          />
-        </Field>
-
-        <div>
-          <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Parameters
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              Optional
-            </span>
-          </label>
-          <ToolParameterBuilder
-            fieldName="parameter_schema"
-            initialSchema={tool?.parameter_schema ?? {}}
-          />
-        </div>
-      </ActionForm>
+        Manage tool definitions in the library →
+      </Link>
     </div>
   );
 }
@@ -698,7 +647,7 @@ export function DeleteAgentButton({
       confirm={
         hasNumber
           ? `Delete "${agentName}"? Its phone number stays on the Twilio account but will route to nothing until you assign it to another agent.`
-          : `Delete "${agentName}"? Its prompt, departments, knowledge base and tools go with it. Call logs are kept.`
+          : `Delete "${agentName}"? Its prompt, departments and knowledge base go with it -- tools it used stay in the shared library. Call logs are kept.`
       }
       hidden={{ agent_id: agentId }}
     />

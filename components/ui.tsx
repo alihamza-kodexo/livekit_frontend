@@ -39,7 +39,7 @@ export function PageHeader({
           </p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -71,7 +71,7 @@ export function Card({
               </p>
             )}
           </div>
-          {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
+          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </header>
       )}
       <div className="p-5">{children}</div>
@@ -221,6 +221,7 @@ const BADGE_TONES = {
   amber: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
   red: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
   blue: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+  violet: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
 } as const;
 
 export function Badge({
@@ -323,8 +324,37 @@ const FIELD_BADGE_CLASSES: Record<"required" | "optional", string> = {
     "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
+/**
+ * Small "i" icon that reveals `text` in a floating bubble on hover/focus,
+ * instead of a permanently-visible paragraph. Anchored above the icon by
+ * default (`bottom-full`) since that's usually clearer above a form field,
+ * and width-clamped so it can't overflow off the side of the viewport.
+ */
+export function InfoTooltip({ text }: { text: ReactNode }) {
+  return (
+    <span className="group/tooltip relative inline-flex">
+      <button
+        type="button"
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-400 text-[0.625rem] leading-none font-medium text-zinc-500 hover:border-zinc-600 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-600 dark:text-zinc-400 dark:hover:border-zinc-300 dark:hover:text-zinc-200"
+        aria-label="More info"
+      >
+        i
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[min(20rem,80vw)] -translate-x-1/2 rounded-md bg-zinc-900 px-3 py-2 text-xs leading-relaxed font-normal whitespace-normal text-zinc-50 opacity-0 shadow-lg transition-opacity duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100 dark:bg-zinc-100 dark:text-zinc-900"
+      >
+        {text}
+        <span className="absolute top-full left-1/2 h-0 w-0 -translate-x-1/2 border-4 border-transparent border-t-zinc-900 dark:border-t-zinc-100" />
+      </span>
+    </span>
+  );
+}
+
 /** Pass `"required"`/`"optional"` for the common cases, or a short string
- * (e.g. `"Required to activate"`) for a field that's conditionally needed. */
+ * (e.g. `"Required to activate"`) for a field that's conditionally needed.
+ * `hint`, if given, shows in a hover tooltip off an "i" icon next to the
+ * label rather than as permanent text under the field. */
 export function Field({
   label,
   hint,
@@ -342,9 +372,10 @@ export function Field({
     <div className="space-y-1.5">
       <label
         htmlFor={htmlFor}
-        className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200"
+        className="flex items-center gap-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-200"
       >
         {label}
+        {hint && <InfoTooltip text={hint} />}
         {badge && (
           <span
             className={cx(
@@ -359,9 +390,6 @@ export function Field({
         )}
       </label>
       {children}
-      {hint && (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
-      )}
     </div>
   );
 }

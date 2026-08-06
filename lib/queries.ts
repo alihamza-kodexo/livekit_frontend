@@ -7,7 +7,6 @@ import type {
   CallOutcome,
   Department,
   ExternalNumber,
-  KnowledgeBaseEntry,
   Tool,
 } from "@/lib/types";
 
@@ -75,28 +74,21 @@ export async function listDepartments(agentId: string): Promise<Department[]> {
   )) as unknown as Department[];
 }
 
-export async function listKnowledgeBase(
-  agentId: string,
-): Promise<KnowledgeBaseEntry[]> {
+/** The whole tools library -- shared across every agent (see 0014_global_tools.sql). */
+export async function listAllTools(): Promise<Tool[]> {
   return (await expect(
-    db()
-      .from("knowledge_base")
-      .select("*")
-      .eq("agent_id", agentId)
-      .order("title", { ascending: true }),
-    "listKnowledgeBase",
-  )) as unknown as KnowledgeBaseEntry[];
+    db().from("tools").select("*").order("name", { ascending: true }),
+    "listAllTools",
+  )) as unknown as Tool[];
 }
 
-export async function listTools(agentId: string): Promise<Tool[]> {
-  return (await expect(
-    db()
-      .from("tools")
-      .select("*")
-      .eq("agent_id", agentId)
-      .order("created_at", { ascending: true }),
-    "listTools",
-  )) as unknown as Tool[];
+/** Which of the global tools this agent currently has selected. */
+export async function listAgentTools(agentId: string): Promise<Tool[]> {
+  const rows = (await expect(
+    db().from("agent_tools").select("tools(*)").eq("agent_id", agentId),
+    "listAgentTools",
+  )) as unknown as { tools: Tool | null }[];
+  return rows.map((r) => r.tools).filter((t): t is Tool => t !== null);
 }
 
 export type CallLogFilters = {
@@ -120,7 +112,7 @@ export async function listCallLogs(
     .select(
       "call_log_id, call_sid, room_id, agent_id, caller_number, recording_url, " +
         "duration_seconds, outcome, matched_department, lead_name, lead_company, " +
-        "lead_need, created_at",
+        "lead_need, is_test, created_at",
     )
     .order("created_at", { ascending: false })
     .limit(limit);

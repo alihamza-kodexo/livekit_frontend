@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CallFilters } from "@/app/(protected)/calls/filters";
 import {
+  Badge,
   Card,
   ConfigNotice,
   Duration,
@@ -108,7 +109,9 @@ export default async function CallsPage({
                     <Timestamp value={call.created_at} />
                   </Td>
                   <Td>
-                    {call.caller_number ? (
+                    {call.is_test ? (
+                      <Badge tone="blue">Web call</Badge>
+                    ) : call.caller_number ? (
                       <Mono>{call.caller_number}</Mono>
                     ) : (
                       <span className="text-zinc-400">unknown</span>

@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 import { signOut } from "@/components/nav-actions";
 
 const LINKS = [
   { href: "/agents", label: "Agents" },
+  { href: "/tools", label: "Tools" },
   { href: "/numbers", label: "Numbers" },
   { href: "/calls", label: "Call logs" },
   { href: "/integrations", label: "Integrations" },
@@ -14,9 +16,28 @@ const LINKS = [
 
 export function Nav({ userEmail }: { userEmail: string }) {
   const pathname = usePathname();
+  const headerRef = useRef<HTMLElement>(null);
+
+  // Publishes this nav's real rendered height as a CSS var, so anything that
+  // stacks a sticky element below it (see components/sticky-band.tsx) can
+  // position against the actual height instead of a guessed pixel value --
+  // guessing is exactly what produced the gap/overlap this replaces.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () =>
+      document.documentElement.style.setProperty("--nav-h", `${el.offsetHeight}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
-    <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-20 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+    >
       <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
         <Link
           href="/agents"

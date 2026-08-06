@@ -15,6 +15,7 @@ import {
   str,
   type ActionState,
 } from "@/lib/forms";
+import { voiceProviderEnv } from "@/lib/env";
 import { db } from "@/lib/supabase";
 import type {
   AgentStatus,
@@ -25,6 +26,29 @@ import type {
   QualificationCriterion,
 } from "@/lib/types";
 import { AGENT_STATUSES, FIRST_MESSAGE_MODES, LLM_PROVIDERS } from "@/lib/types";
+
+/**
+ * An agent can be switched to "active" with an LLM provider whose API key
+ * was never set on the worker -- the dashboard save succeeds, then every
+ * real call to it fails at the worker. Checked wherever status can become
+ * "active" so that's caught here instead of on a live caller.
+ */
+function missingProviderKeyMessage(llmProvider: LLMProvider): string | null {
+  const env = voiceProviderEnv();
+  if (!env.deepgramApiKey) {
+    return "DEEPGRAM_API_KEY isn't set -- every agent needs it for speech-to-text/text-to-speech.";
+  }
+  if (llmProvider === "groq" && !env.groqApiKey) {
+    return "This agent's conversation engine is Groq, but GROQ_API_KEY isn't set -- set it, or switch engines on the Voice & humanness tab, before activating.";
+  }
+  if (llmProvider === "deepseek" && !env.deepseekApiKey) {
+    return "This agent's conversation engine is DeepSeek, but DEEPSEEK_API_KEY isn't set -- set it, or switch engines on the Voice & humanness tab, before activating.";
+  }
+  if (llmProvider === "gemini_live" && !env.geminiApiKey) {
+    return "This agent's conversation engine is Gemini Live, but GEMINI_API_KEY isn't set -- set it, or switch engines on the Voice & humanness tab, before activating.";
+  }
+  return null;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Create / delete                                                            */
@@ -65,9 +89,10 @@ export async function deleteAgent(
     const agentId = str(form, "agent_id");
     if (!agentId) return fail("Missing agent id.");
 
-    // Departments, knowledge base rows and tools cascade (see the migration).
-    // call_logs deliberately do not — they're set to null so call history
-    // survives deleting the agent that handled it.
+    // Departments and this agent's tool selections (agent_tools rows, not the
+    // shared tool definitions themselves) cascade. call_logs deliberately do
+    // not — they're set to null so call history survives deleting the agent
+    // that handled it.
     const { error } = await db().from("agents").delete().eq("agent_id", agentId);
     if (error) return fail(`Could not delete agent: ${error.message}`);
 
@@ -95,8 +120,20 @@ export async function updateAgentCore(
     if (!AGENT_STATUSES.includes(status)) return fail("Unknown status.");
 
     const prompt = str(form, "prompt");
-    if (status === "active" && !prompt) {
-      return fail("An active agent needs a prompt — it has nothing to say yet.");
+    if (status === "active") {
+      if (!prompt) {
+        return fail("An active agent needs a prompt — it has nothing to say yet.");
+      }
+      const { data: current, error: fetchError } = await db()
+        .from("agents")
+        .select("llm_provider")
+        .eq("agent_id", agentId)
+        .maybeSingle();
+      if (fetchError) return fail(fetchError.message);
+      const providerError = missingProviderKeyMessage(
+        (current?.llm_provider as LLMProvider) ?? "groq",
+      );
+      if (providerError) return fail(providerError);
     }
 
     const firstMessageMode = str(form, "first_message_mode") as FirstMessageMode;
@@ -140,6 +177,11 @@ export async function updateAgentCore(
       .find((key, i, all) => all.indexOf(key) !== i);
     if (duplicate) return fail(`Duplicate qualification key "${duplicate}".`);
 
+    const endCallWebhookUrl = optionalStr(form, "end_call_webhook_url");
+    if (endCallWebhookUrl && !/^https?:\/\//.test(endCallWebhookUrl)) {
+      return fail("End-call webhook URL must start with http:// or https://.");
+    }
+
     const { error } = await db()
       .from("agents")
       .update({
@@ -150,9 +192,60 @@ export async function updateAgentCore(
         first_message_text: firstMessageText,
         qualification_criteria: criteria,
         end_call_instructions: optionalStr(form, "end_call_instructions"),
+        end_call_webhook_url: endCallWebhookUrl,
       })
       .eq("agent_id", agentId);
 
+    if (error) return fail(`Could not save: ${error.message}`);
+
+    revalidatePath(`/agents/${agentId}`);
+    revalidatePath("/agents");
+    return ok("Saved.");
+  });
+}
+
+/**
+ * Renaming or (de)activating an agent, split out of updateAgentCore so the
+ * sticky header's quick editor doesn't have to resubmit the whole Prompt &
+ * qualification form (prompt, qualification criteria, etc.) just to flip a
+ * status -- it only ever touches these two columns.
+ */
+export async function updateAgentIdentity(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return guard(async () => {
+    const agentId = str(form, "agent_id");
+    if (!agentId) return fail("Missing agent id.");
+
+    const name = str(form, "name");
+    if (!name) return fail("Name can't be empty.");
+
+    const status = str(form, "status") as AgentStatus;
+    if (!AGENT_STATUSES.includes(status)) return fail("Unknown status.");
+
+    if (status === "active") {
+      const { data: current, error: fetchError } = await db()
+        .from("agents")
+        .select("prompt, llm_provider")
+        .eq("agent_id", agentId)
+        .maybeSingle();
+      if (fetchError) return fail(fetchError.message);
+      if (!current?.prompt) {
+        return fail(
+          "An active agent needs a prompt -- set one on the Prompt & qualification tab first.",
+        );
+      }
+      const providerError = missingProviderKeyMessage(
+        (current.llm_provider as LLMProvider) ?? "groq",
+      );
+      if (providerError) return fail(providerError);
+    }
+
+    const { error } = await db()
+      .from("agents")
+      .update({ name, status })
+      .eq("agent_id", agentId);
     if (error) return fail(`Could not save: ${error.message}`);
 
     revalidatePath(`/agents/${agentId}`);
@@ -199,6 +292,21 @@ export async function updateAgentVoice(
 
     const llmProvider = str(form, "llm_provider") as LLMProvider;
     if (!LLM_PROVIDERS.includes(llmProvider)) return fail("Unknown LLM provider.");
+
+    // Switching engines on an already-active agent is the other way this
+    // gap showed up: the prompt/status checks in updateAgentCore/
+    // updateAgentIdentity never re-run here, so an active agent could be
+    // pointed at a provider with no key set without either of them catching it.
+    const { data: currentAgent, error: statusFetchError } = await db()
+      .from("agents")
+      .select("status")
+      .eq("agent_id", agentId)
+      .maybeSingle();
+    if (statusFetchError) return fail(statusFetchError.message);
+    if (currentAgent?.status === "active") {
+      const providerError = missingProviderKeyMessage(llmProvider);
+      if (providerError) return fail(providerError);
+    }
 
     const settings: ConversationSettings = {};
     for (const field of CONVERSATION_FIELDS) {
@@ -327,55 +435,10 @@ export async function saveDepartments(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Knowledge base                                                             */
+/* Knowledge base -- one free-text field per agent, see 0013 migration        */
 /* -------------------------------------------------------------------------- */
 
-export async function saveKnowledgeEntry(
-  _prev: ActionState,
-  form: FormData,
-): Promise<ActionState> {
-  return guard(async () => {
-    const agentId = str(form, "agent_id");
-    const title = str(form, "title");
-    const content = str(form, "content");
-    if (!agentId) return fail("Missing agent id.");
-    if (!title) return fail("Give the entry a title.");
-    if (!content) return fail("Give the entry some content.");
-
-    const kbId = optionalStr(form, "kb_id");
-    const { error } = kbId
-      ? await db().from("knowledge_base").update({ title, content }).eq("kb_id", kbId)
-      : await db().from("knowledge_base").insert({ agent_id: agentId, title, content });
-
-    if (error) return fail(`Could not save entry: ${error.message}`);
-
-    revalidatePath(`/agents/${agentId}`);
-    return ok(kbId ? "Entry updated." : "Entry added.");
-  });
-}
-
-export async function deleteKnowledgeEntry(
-  _prev: ActionState,
-  form: FormData,
-): Promise<ActionState> {
-  return guard(async () => {
-    const agentId = str(form, "agent_id");
-    const kbId = str(form, "kb_id");
-    if (!kbId) return fail("Missing entry id.");
-
-    const { error } = await db().from("knowledge_base").delete().eq("kb_id", kbId);
-    if (error) return fail(`Could not delete entry: ${error.message}`);
-
-    revalidatePath(`/agents/${agentId}`);
-    return ok("Entry deleted.");
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/* Tools (Project Plan v2 — Vapi-style tools framework)                       */
-/* -------------------------------------------------------------------------- */
-
-export async function saveTool(
+export async function updateAgentKnowledgeBase(
   _prev: ActionState,
   form: FormData,
 ): Promise<ActionState> {
@@ -383,78 +446,60 @@ export async function saveTool(
     const agentId = str(form, "agent_id");
     if (!agentId) return fail("Missing agent id.");
 
-    const name = str(form, "name");
-    if (!isIdentifier(name)) {
-      return fail(
-        "Tool name must be letters, digits and underscores, starting with a letter — it's passed straight to the model's function-calling interface.",
-      );
-    }
+    const { error } = await db()
+      .from("agents")
+      .update({
+        knowledge_base_content: str(form, "knowledge_base_content"),
+        knowledge_base_description: str(form, "knowledge_base_description"),
+      })
+      .eq("agent_id", agentId);
 
-    const description = str(form, "description");
-    if (!description) {
-      return fail("Describe when the agent should use this tool — the model reads this to decide.");
-    }
-
-    const webhookUrl = optionalStr(form, "webhook_url");
-    if (!webhookUrl) {
-      return fail(
-        "Custom tools run by calling an n8n webhook, so a webhook URL is required.",
-      );
-    }
-    if (!/^https?:\/\//.test(webhookUrl)) {
-      return fail("Webhook URL must start with http:// or https://.");
-    }
-
-    // Stored as JSON Schema. Parsed here rather than at call time so a typo
-    // surfaces to the admin now, not to a caller mid-conversation.
-    const rawSchema = str(form, "parameter_schema") || "{}";
-    let parameterSchema: Record<string, unknown>;
-    try {
-      const parsed = JSON.parse(rawSchema);
-      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return fail("Parameter schema must be a JSON object.");
-      }
-      parameterSchema = parsed as Record<string, unknown>;
-    } catch (error) {
-      return fail(
-        `Parameter schema isn't valid JSON: ${error instanceof Error ? error.message : "parse error"}`,
-      );
-    }
-
-    const toolId = optionalStr(form, "tool_id");
-    const payload = {
-      agent_id: agentId,
-      name,
-      description,
-      parameter_schema: parameterSchema,
-      webhook_url: webhookUrl,
-      is_builtin: false,
-    };
-
-    const { error } = toolId
-      ? await db().from("tools").update(payload).eq("tool_id", toolId)
-      : await db().from("tools").insert(payload);
-
-    if (error) return fail(`Could not save tool: ${error.message}`);
+    if (error) return fail(`Could not save: ${error.message}`);
 
     revalidatePath(`/agents/${agentId}`);
-    return ok(toolId ? "Tool updated." : "Tool added.");
+    return ok("Saved.");
   });
 }
 
-export async function deleteTool(
+/* -------------------------------------------------------------------------- */
+/* Tools -- global library (see /(protected)/tools/actions.ts); this agent    */
+/* only picks which of them it uses.                                         */
+/* -------------------------------------------------------------------------- */
+
+export async function attachTool(
   _prev: ActionState,
   form: FormData,
 ): Promise<ActionState> {
   return guard(async () => {
     const agentId = str(form, "agent_id");
     const toolId = str(form, "tool_id");
-    if (!toolId) return fail("Missing tool id.");
+    if (!agentId || !toolId) return fail("Missing agent or tool id.");
 
-    const { error } = await db().from("tools").delete().eq("tool_id", toolId);
-    if (error) return fail(`Could not delete tool: ${error.message}`);
+    const { error } = await db().from("agent_tools").insert({ agent_id: agentId, tool_id: toolId });
+    if (error) return fail(`Could not attach tool: ${error.message}`);
 
     revalidatePath(`/agents/${agentId}`);
-    return ok("Tool deleted.");
+    return ok("Tool attached.");
+  });
+}
+
+export async function detachTool(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return guard(async () => {
+    const agentId = str(form, "agent_id");
+    const toolId = str(form, "tool_id");
+    if (!agentId || !toolId) return fail("Missing agent or tool id.");
+
+    const { error } = await db()
+      .from("agent_tools")
+      .delete()
+      .eq("agent_id", agentId)
+      .eq("tool_id", toolId);
+    if (error) return fail(`Could not detach tool: ${error.message}`);
+
+    revalidatePath(`/agents/${agentId}`);
+    return ok("Tool detached.");
   });
 }

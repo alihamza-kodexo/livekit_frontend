@@ -8,11 +8,11 @@
 
 import type {
   Agent,
+  AgentToolLink,
   AllowedUser,
   CallLog,
   Department,
   ExternalNumber,
-  KnowledgeBaseEntry,
   Tool,
 } from "@/lib/types";
 
@@ -34,8 +34,8 @@ export type Database = {
     Tables: {
       agents: TableDef<Agent, "agent_id">;
       departments: TableDef<Department, "department_id">;
-      knowledge_base: TableDef<KnowledgeBaseEntry, "kb_id">;
       tools: TableDef<Tool, "tool_id">;
+      agent_tools: TableDef<AgentToolLink, never>;
       call_logs: TableDef<CallLog, "call_log_id">;
       allowed_users: TableDef<AllowedUser, "email">;
       external_numbers: TableDef<ExternalNumber, "external_number_id">;

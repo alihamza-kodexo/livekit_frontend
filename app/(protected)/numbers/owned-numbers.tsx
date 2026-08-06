@@ -17,6 +17,22 @@ import type { OwnedNumber } from "@/lib/twilio";
 
 type AssignedAgent = { agent_id: string; name: string; status: AgentStatus } | null;
 
+/** Recognized third-party voice platforms, so a known one gets a clean badge
+ * instead of dumping its raw webhook URL into the table. */
+const KNOWN_VOICE_PLATFORMS: { host: RegExp; label: string }[] = [
+  { host: /(^|\.)vapi\.ai$/, label: "Vapi" },
+];
+
+function externalVoicePlatform(voiceUrl: string): string | null {
+  let hostname: string;
+  try {
+    hostname = new URL(voiceUrl).hostname;
+  } catch {
+    return null;
+  }
+  return KNOWN_VOICE_PLATFORMS.find((p) => p.host.test(hostname))?.label ?? null;
+}
+
 /** A number bought on the platform's own Twilio account. */
 export type PlatformNumberRow = OwnedNumber & {
   source: "platform";
@@ -48,6 +64,19 @@ export function OwnedNumbers({
   agents: { agent_id: string; name: string }[];
 }) {
   const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState<number | "all">(10);
+  const [page, setPage] = useState(1);
+
+  // A new search or page size can leave the current page pointed at a now-
+  // stale slice (e.g. page 3 of a search that now only has 1 page). Reset
+  // during render rather than in an effect -- see "Adjusting state when a
+  // prop changes" in the React docs.
+  const [resetKey, setResetKey] = useState(`${search}|${pageSize}`);
+  const currentResetKey = `${search}|${pageSize}`;
+  if (resetKey !== currentResetKey) {
+    setResetKey(currentResetKey);
+    setPage(1);
+  }
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -60,16 +89,41 @@ export function OwnedNumbers({
     );
   }, [numbers, search]);
 
+  const totalPages =
+    pageSize === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows =
+    pageSize === "all"
+      ? filtered
+      : filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <div className="space-y-3">
-      <Input
-        type="search"
-        placeholder="Search by number, label, or assigned agent…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        aria-label="Search numbers"
-        className="sm:max-w-xs"
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          type="search"
+          placeholder="Search by number, label, or assigned agent…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search numbers"
+          className="sm:max-w-xs"
+        />
+        <label className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          Show
+          <Select
+            aria-label="Numbers per page"
+            value={pageSize}
+            onChange={(e) =>
+              setPageSize(e.target.value === "all" ? "all" : Number(e.target.value))
+            }
+            className="w-auto py-1"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value="all">All</option>
+          </Select>
+        </label>
+      </div>
       {filtered.length === 0 ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           No numbers match &ldquo;{search}&rdquo;.
@@ -89,7 +143,7 @@ export function OwnedNumbers({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((number) => (
+              {pageRows.map((number) => (
                 <tr key={number.sid}>
                   <Td>
                     <Mono>{number.phoneNumber}</Mono>
@@ -107,6 +161,21 @@ export function OwnedNumbers({
                     ) : (
                       <Badge tone="red">not routed</Badge>
                     )}
+                    {number.source === "platform" &&
+                      !number.onSharedTrunk &&
+                      number.voiceUrl &&
+                      (() => {
+                        const platform = externalVoicePlatform(number.voiceUrl);
+                        return platform ? (
+                          <div className="mt-1.5">
+                            <Badge tone="violet">Live on {platform}</Badge>
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                            Currently calls <Mono>{number.voiceUrl}</Mono>
+                          </div>
+                        );
+                      })()}
                   </Td>
                   <Td>
                     <AssignmentPicker number={number} agents={agents} />
@@ -138,6 +207,14 @@ export function OwnedNumbers({
                               action={attachNumber}
                               label="Attach"
                               variant="primary"
+                              confirm={
+                                number.voiceUrl
+                                  ? `${number.phoneNumber} is currently live on ${
+                                      externalVoicePlatform(number.voiceUrl) ??
+                                      number.voiceUrl
+                                    }. Attaching it to the shared trunk overrides that immediately -- Twilio ignores a number's Voice URL once it's on a trunk, so whatever answers it today stops receiving calls the moment you confirm. Continue?`
+                                  : undefined
+                              }
                               hidden={{
                                 number_sid: number.sid,
                                 phone_number: number.phoneNumber,
@@ -162,6 +239,29 @@ export function OwnedNumbers({
               ))}
             </tbody>
           </Table>
+          {pageSize !== "all" && totalPages > 1 && (
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+              >
+                Previous
+              </Button>
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

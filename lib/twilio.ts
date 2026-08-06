@@ -14,17 +14,6 @@ function client() {
   return cached;
 }
 
-/** A number Twilio has for sale, as shown in the search results table. */
-export type AvailableNumber = {
-  phoneNumber: string;
-  friendlyName: string;
-  locality: string | null;
-  region: string | null;
-  isoCountry: string;
-  /** True when Twilio requires a verified Address on file before purchase. */
-  addressRequired: boolean;
-};
-
 /** A number this Twilio account already owns. */
 export type OwnedNumber = {
   sid: string;
@@ -34,42 +23,14 @@ export type OwnedNumber = {
   trunkSid: string | null;
   /** True when it's attached to *our* shared trunk specifically. */
   onSharedTrunk: boolean;
+  /**
+   * The number's own Voice URL webhook, if any -- e.g. a number still pointed
+   * at another provider (Vapi, Bland, a bare Twilio Function) instead of a
+   * trunk. Twilio ignores this once the number is on a trunk, so attaching
+   * silently cuts over whatever currently answers calls to it.
+   */
+  voiceUrl: string | null;
 };
-
-export type NumberSearchParams = {
-  /** ISO country code, e.g. "US". */
-  country: string;
-  areaCode?: number;
-  /** Digit/letter pattern, e.g. "510*" or "*KODEXO". */
-  contains?: string;
-  limit?: number;
-};
-
-export async function searchAvailableNumbers({
-  country,
-  areaCode,
-  contains,
-  limit = 20,
-}: NumberSearchParams): Promise<AvailableNumber[]> {
-  const results = await client()
-    .availablePhoneNumbers(country)
-    .local.list({
-      ...(areaCode ? { areaCode } : {}),
-      ...(contains ? { contains } : {}),
-      // The agent answers calls, so a number that can't receive voice is useless.
-      voiceEnabled: true,
-      limit,
-    });
-
-  return results.map((n) => ({
-    phoneNumber: n.phoneNumber,
-    friendlyName: n.friendlyName,
-    locality: n.locality || null,
-    region: n.region || null,
-    isoCountry: n.isoCountry,
-    addressRequired: n.addressRequirements !== "none",
-  }));
-}
 
 export async function listOwnedNumbers(): Promise<OwnedNumber[]> {
   const { trunkSid } = twilioEnv();
@@ -81,36 +42,8 @@ export async function listOwnedNumbers(): Promise<OwnedNumber[]> {
     friendlyName: n.friendlyName,
     trunkSid: n.trunkSid || null,
     onSharedTrunk: n.trunkSid === trunkSid,
+    voiceUrl: n.voiceUrl || null,
   }));
-}
-
-/**
- * Buys a number and attaches it to the shared SIP trunk in a single API call.
- *
- * Doing both at once matters: a number that exists but isn't on the trunk is a
- * number that rings into nothing, and this account is billed for it either way.
- *
- * Costs real money and is not reversible without releasing the number — every
- * caller must have explicit admin confirmation behind it.
- */
-export async function purchaseNumber(
-  phoneNumber: string,
-  friendlyName: string,
-): Promise<OwnedNumber> {
-  const { trunkSid } = twilioEnv();
-  const created = await client().incomingPhoneNumbers.create({
-    phoneNumber,
-    friendlyName,
-    trunkSid,
-  });
-
-  return {
-    sid: created.sid,
-    phoneNumber: created.phoneNumber,
-    friendlyName: created.friendlyName,
-    trunkSid: created.trunkSid || null,
-    onSharedTrunk: created.trunkSid === trunkSid,
-  };
 }
 
 /** Routes an already-owned number out through the shared SIP trunk. */

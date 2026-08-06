@@ -12,4 +12,9 @@
  */
 body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  /* The /agents layout breaks out of <main>'s max-w-6xl centering with a
+     100vw-wide wrapper (see agents/layout.tsx) so the sidebar can sit flush
+     against the viewport edge on wide screens -- 100vw can exceed 100% by the
+     scrollbar's width, so this keeps that from adding a horizontal scrollbar. */
+  overflow-x: hidden;
 }
