@@ -46,8 +46,13 @@ export default async function AgentsLayout({
   return (
     // Breaks out of <main>'s `mx-auto max-w-6xl` centering -- with a
     // persistent sidebar there's no reason to waste the space that leaves on
-    // wide screens, so this spans the full viewport width instead.
-    <div className="relative left-1/2 w-screen -translate-x-1/2 px-6">
+    // wide screens, so this spans the full viewport width instead. Uses
+    // margins rather than `left` + `translate-x` -- a `transform` on any
+    // ancestor creates a new containing block for `position: fixed`
+    // descendants, which silently broke the test-call widget's fixed
+    // positioning (it was positioning against this element instead of the
+    // viewport). Margins avoid that entirely.
+    <div className="mx-[calc(50%-50vw)] w-screen px-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <AgentsSidebar agents={agents} />
         <div className="min-w-0 flex-1 space-y-6">{children}</div>

@@ -12,14 +12,7 @@ import {
 import { AgentIdentityForm } from "@/app/(protected)/agents/[agentId]/identity-form";
 import { AgentModelSummary } from "@/app/(protected)/agents/[agentId]/model-summary";
 import { TestAgentPanel } from "@/app/(protected)/agents/[agentId]/test-panel";
-import {
-  ButtonLink,
-  Card,
-  CollapsibleCard,
-  Mono,
-  PageHeader,
-  Timestamp,
-} from "@/components/ui";
+import { Card, CollapsibleCard, Mono, PageHeader, Timestamp } from "@/components/ui";
 import { StickyBand } from "@/components/sticky-band";
 import { Tabs } from "@/components/tabs";
 import { getAgent, listAgentTools, listAllTools } from "@/lib/queries";
@@ -55,9 +48,7 @@ export default async function AgentPage({
           actions={
             <>
               <AgentIdentityForm agent={agent} />
-              <ButtonLink href={`/agents/${agent.agent_id}?tab=test`} variant="primary">
-                Test agent
-              </ButtonLink>
+              <TestAgentPanel agentId={agent.agent_id} agentName={agent.name} />
             </>
           }
         />
@@ -89,12 +80,6 @@ export default async function AgentPage({
           View calls
         </Link>
       </div>
-
-      {defaultTab === "test" && (
-        <Card description="Talk to this agent right now through your browser's microphone -- no phone number or Twilio call involved.">
-          <TestAgentPanel agentId={agent.agent_id} />
-        </Card>
-      )}
 
       <Tabs
         key={defaultTab ?? "default"}
