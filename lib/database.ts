@@ -11,7 +11,6 @@ import type {
   AgentToolLink,
   AllowedUser,
   CallLog,
-  Department,
   ExternalNumber,
   Tool,
 } from "@/lib/types";
@@ -33,7 +32,6 @@ export type Database = {
   public: {
     Tables: {
       agents: TableDef<Agent, "agent_id">;
-      departments: TableDef<Department, "department_id">;
       tools: TableDef<Tool, "tool_id">;
       agent_tools: TableDef<AgentToolLink, never>;
       call_logs: TableDef<CallLog, "call_log_id">;

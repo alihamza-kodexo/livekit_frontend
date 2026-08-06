@@ -4,14 +4,8 @@ import { useState } from "react";
 
 import { ToolForm } from "@/app/(protected)/tools/tool-form";
 import { Button } from "@/components/ui";
+import { toolTypeMeta } from "@/lib/tool-display";
 import type { Tool } from "@/lib/types";
-
-function toolParamCount(tool: Tool): number {
-  const properties = tool.parameter_schema?.properties;
-  return properties && typeof properties === "object" && !Array.isArray(properties)
-    ? Object.keys(properties).length
-    : 0;
-}
 
 /** Vapi/Retell-style tools screen: every tool in the shared library on the
  * left, the selected one's full settings on the right. Agents pick which of
@@ -41,6 +35,7 @@ export function ToolsLibraryPanel({ tools }: { tools: Tool[] }) {
           )}
           {tools.map((tool) => {
             const active = tool.tool_id === selectedId;
+            const { icon, badge } = toolTypeMeta(tool);
             return (
               <button
                 key={tool.tool_id}
@@ -56,7 +51,7 @@ export function ToolsLibraryPanel({ tools }: { tools: Tool[] }) {
                   aria-hidden
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-500 text-xs font-bold text-white"
                 >
-                  ƒ
+                  {icon}
                 </span>
                 <span className="min-w-0">
                   <span
@@ -71,11 +66,11 @@ export function ToolsLibraryPanel({ tools }: { tools: Tool[] }) {
                   <span
                     className={
                       active
-                        ? "block text-xs text-zinc-300 dark:text-zinc-600"
-                        : "block text-xs text-zinc-500 dark:text-zinc-400"
+                        ? "block truncate text-xs text-zinc-300 dark:text-zinc-600"
+                        : "block truncate text-xs text-zinc-500 dark:text-zinc-400"
                     }
                   >
-                    function · {toolParamCount(tool)} param{toolParamCount(tool) === 1 ? "" : "s"}
+                    {badge}
                   </span>
                 </span>
               </button>

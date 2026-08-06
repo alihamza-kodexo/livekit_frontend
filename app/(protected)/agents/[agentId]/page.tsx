@@ -6,7 +6,6 @@ import {
   BuiltinTools,
   CoreConfigForm,
   DeleteAgentButton,
-  DepartmentsForm,
   KnowledgeBaseForm,
   VoiceConfigForm,
 } from "@/app/(protected)/agents/[agentId]/sections";
@@ -23,12 +22,7 @@ import {
 } from "@/components/ui";
 import { StickyBand } from "@/components/sticky-band";
 import { Tabs } from "@/components/tabs";
-import {
-  getAgent,
-  listAgentTools,
-  listAllTools,
-  listDepartments,
-} from "@/lib/queries";
+import { getAgent, listAgentTools, listAllTools } from "@/lib/queries";
 
 export default async function AgentPage({
   params,
@@ -40,8 +34,7 @@ export default async function AgentPage({
   const agent = await getAgent(agentId);
   if (!agent) notFound();
 
-  const [departments, allTools, agentTools] = await Promise.all([
-    listDepartments(agentId),
+  const [allTools, agentTools] = await Promise.all([
     listAllTools(),
     listAgentTools(agentId),
   ]);
@@ -127,15 +120,6 @@ export default async function AgentPage({
               ),
             },
             {
-              key: "departments",
-              label: "Departments",
-              content: (
-                <Card description="Entirely optional — an agent works fine with zero departments. Where a caller gets transferred when you do add one: the agent matches intent against the routing keywords, then dials the number.">
-                  <DepartmentsForm agentId={agent.agent_id} departments={departments} />
-                </Card>
-              ),
-            },
-            {
               key: "knowledge",
               label: "Knowledge base",
               content: (
@@ -158,7 +142,7 @@ export default async function AgentPage({
                   </Card>
                   <CollapsibleCard
                     title="Built-in tools"
-                    description="Every agent gets these automatically -- they're code in the worker, not something created per agent. Click to see what they do and what the model fills in when it calls one."
+                    description="The one tool every agent always has automatically -- something has to be able to hang up regardless of what's attached above. Click to see what it does and what the model fills in when it calls it."
                   >
                     <BuiltinTools />
                   </CollapsibleCard>

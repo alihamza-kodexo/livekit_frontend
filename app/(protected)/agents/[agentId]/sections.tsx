@@ -6,16 +6,16 @@ import {
   attachTool,
   deleteAgent,
   detachTool,
-  saveDepartments,
   updateAgentCore,
   updateAgentKnowledgeBase,
   updateAgentVoice,
 } from "@/app/(protected)/agents/actions";
 import { ActionButton, ActionForm } from "@/components/form";
 import { RepeatableRows } from "@/components/repeatable-rows";
+import { toolTypeMeta } from "@/lib/tool-display";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { VoicePicker } from "@/components/voice-picker";
-import type { Agent, Department, FirstMessageMode, LLMProvider, Tool } from "@/lib/types";
+import type { Agent, FirstMessageMode, LLMProvider, Tool } from "@/lib/types";
 import {
   BUILTIN_TOOLS,
   CONVERSATION_SETTING_DEFAULTS,
@@ -397,61 +397,6 @@ export function VoiceConfigForm({ agent }: { agent: Agent }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Departments                                                                */
-/* -------------------------------------------------------------------------- */
-
-export function DepartmentsForm({
-  agentId,
-  departments,
-}: {
-  agentId: string;
-  departments: Department[];
-}) {
-  return (
-    <ActionForm
-      action={saveDepartments}
-      submitLabel="Save departments"
-      pendingLabel="Saving…"
-    >
-      <input type="hidden" name="agent_id" value={agentId} />
-      <RepeatableRows
-        addLabel="Add department"
-        emptyHint="No departments yet — the agent has nowhere to transfer a caller who asks for a human."
-        columns={[
-          { name: "department_id", kind: "hidden" },
-          {
-            name: "department_name",
-            kind: "text",
-            label: "Department",
-            placeholder: "Sales",
-            width: "sm:w-44",
-          },
-          {
-            name: "transfer_number",
-            kind: "text",
-            label: "Transfer to",
-            placeholder: "+15105550100",
-            width: "sm:w-44",
-          },
-          {
-            name: "routing_keywords",
-            kind: "text",
-            label: "Routing keywords",
-            placeholder: "pricing, quote, new project",
-          },
-        ]}
-        initial={departments.map((d) => ({
-          department_id: d.department_id,
-          department_name: d.department_name,
-          transfer_number: d.transfer_number,
-          routing_keywords: d.routing_keywords ?? "",
-        }))}
-      />
-    </ActionForm>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /* Knowledge base                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -551,12 +496,6 @@ export function BuiltinTools() {
 /* Tools -- global library, this agent just picks which ones it uses         */
 /* -------------------------------------------------------------------------- */
 
-function toolParamCount(tool: Tool): number {
-  const properties = tool.parameter_schema?.properties;
-  return properties && typeof properties === "object" && !Array.isArray(properties)
-    ? Object.keys(properties).length
-    : 0;
-}
 
 /** Every tool lives in the shared library at /tools now (see 0014_global_tools.sql)
  * -- this just lets an agent select which ones it uses, via the agent_tools
@@ -583,6 +522,7 @@ export function AgentToolsPanel({
       )}
       {allTools.map((tool) => {
         const attached = selectedToolIds.has(tool.tool_id);
+        const { icon, badge } = toolTypeMeta(tool);
         return (
           <div
             key={tool.tool_id}
@@ -592,7 +532,7 @@ export function AgentToolsPanel({
               aria-hidden
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-500 text-xs font-bold text-white"
             >
-              ƒ
+              {icon}
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -600,7 +540,7 @@ export function AgentToolsPanel({
                   {tool.name}
                 </span>
                 <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                  {toolParamCount(tool)} param{toolParamCount(tool) === 1 ? "" : "s"}
+                  {badge}
                 </span>
               </div>
               <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
@@ -647,7 +587,7 @@ export function DeleteAgentButton({
       confirm={
         hasNumber
           ? `Delete "${agentName}"? Its phone number stays on the Twilio account but will route to nothing until you assign it to another agent.`
-          : `Delete "${agentName}"? Its prompt, departments and knowledge base go with it -- tools it used stay in the shared library. Call logs are kept.`
+          : `Delete "${agentName}"? Its prompt and knowledge base go with it -- tools it used stay in the shared library. Call logs are kept.`
       }
       hidden={{ agent_id: agentId }}
     />

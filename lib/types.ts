@@ -88,16 +88,16 @@ export const CONVERSATION_SETTING_DEFAULTS: Required<ConversationSettings> = {
 };
 
 /**
- * The 4 tools baked into the worker's Python code (`agent-worker/src/worker/tools.py`).
- * Every agent gets all of them automatically, unconditionally -- there's no
- * dashboard entry that creates them the way custom `Tool` rows work, and
- * nothing here is per-agent configurable. Purely informational display.
+ * The one tool baked into the worker's Python code (`agent-worker/src/worker/tools.py`)
+ * that every agent gets automatically, unconditionally -- because something
+ * has to be able to hang up the call regardless of what's configured.
+ * Transfer, lead-recording, and callback-recording used to be unconditional
+ * builtins too; they're now regular attachable `Tool` rows (see `ToolType`)
+ * so an agent that isn't doing lead qualification, say, doesn't get nudged
+ * toward asking for a name/company it has no use for. Purely informational
+ * display -- nothing here is per-agent configurable.
  */
-export type BuiltinToolId =
-  | "transfer_to_department"
-  | "record_lead_info"
-  | "record_callback_number"
-  | "end_call";
+export type BuiltinToolId = "end_call";
 
 export type BuiltinToolInfo = {
   id: BuiltinToolId;
@@ -106,47 +106,9 @@ export type BuiltinToolInfo = {
   parameters: { name: string; type: string; description: string }[];
 };
 
-/** Mirrors the `@function_tool` definitions in `agent-worker/src/worker/tools.py` --
- * keep this in sync if those signatures or descriptions change. */
+/** Mirrors the `@function_tool` definition in `agent-worker/src/worker/tools.py` --
+ * keep this in sync if that signature or description changes. */
 export const BUILTIN_TOOLS: BuiltinToolInfo[] = [
-  {
-    id: "transfer_to_department",
-    name: "transfer_to_department",
-    description:
-      "Silently transfers the caller to a department by name, after the agent has already told the caller out loud. Uses this agent's Departments list to resolve the name to a transfer number.",
-    parameters: [
-      {
-        name: "department_name",
-        type: "string",
-        description: "Must match a configured department's name.",
-      },
-    ],
-  },
-  {
-    id: "record_lead_info",
-    name: "record_lead_info",
-    description:
-      "Records what the agent has learned about the caller as the conversation goes -- name, company, what they need, and qualification answers. Called incrementally, not just once at the end.",
-    parameters: [
-      { name: "lead_name", type: "string (optional)", description: "The caller's name." },
-      { name: "lead_company", type: "string (optional)", description: "The caller's company." },
-      { name: "lead_need", type: "string (optional)", description: "What they're calling about." },
-      {
-        name: "qualification_answers",
-        type: "object (optional)",
-        description: "Answers keyed by this agent's qualification criterion keys.",
-      },
-    ],
-  },
-  {
-    id: "record_callback_number",
-    name: "record_callback_number",
-    description:
-      "Records a callback number after a failed transfer, or whenever the caller needs to be called back instead.",
-    parameters: [
-      { name: "callback_number", type: "string", description: "The number to call back." },
-    ],
-  },
   {
     id: "end_call",
     name: "end_call",
@@ -196,15 +158,26 @@ export type Agent = {
   updated_at: string;
 };
 
-export type Department = {
-  department_id: string;
-  agent_id: string;
-  department_name: string;
-  transfer_number: string;
-  routing_keywords: string | null;
-  created_at: string;
-  updated_at: string;
-};
+/**
+ * "function" calls webhook_url with the model's arguments (the original,
+ * still the only type that runs your own code via n8n). The other three are
+ * native worker behavior that used to be unconditional builtins -- transfer,
+ * lead capture, callback capture -- now admin-created rows like any other
+ * tool, opt-in per agent. See agent-worker/src/worker/tools.py's
+ * build_agent_tools for what each one actually does when called.
+ */
+export type ToolType =
+  | "function"
+  | "transfer_call"
+  | "record_lead_info"
+  | "record_callback_number";
+
+export const TOOL_TYPES: ToolType[] = [
+  "function",
+  "transfer_call",
+  "record_lead_info",
+  "record_callback_number",
+];
 
 /** Global now -- the same tool can be selected by more than one agent via
  * the `agent_tools` join table (see 0014_global_tools.sql), rather than
@@ -213,9 +186,14 @@ export type Tool = {
   tool_id: string;
   name: string;
   description: string;
-  /** JSON Schema for the tool's arguments, passed to DeepSeek function calling. */
+  tool_type: ToolType;
+  /** JSON Schema for the tool's arguments -- only meaningful for "function". */
   parameter_schema: Record<string, unknown>;
+  /** Only set for "function". */
   webhook_url: string | null;
+  /** Only set for "transfer_call" -- one fixed E.164 destination per tool,
+   * like Vapi's Transfer Call tool, rather than a shared departments directory. */
+  destination_number: string | null;
   is_builtin: boolean;
   created_at: string;
   updated_at: string;

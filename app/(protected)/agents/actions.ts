@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import {
   fail,
   guard,
-  isE164,
   isIdentifier,
   num,
   ok,
@@ -89,10 +88,10 @@ export async function deleteAgent(
     const agentId = str(form, "agent_id");
     if (!agentId) return fail("Missing agent id.");
 
-    // Departments and this agent's tool selections (agent_tools rows, not the
-    // shared tool definitions themselves) cascade. call_logs deliberately do
-    // not — they're set to null so call history survives deleting the agent
-    // that handled it.
+    // This agent's tool selections (agent_tools rows, not the shared tool
+    // definitions themselves) cascade. call_logs deliberately do not --
+    // they're set to null so call history survives deleting the agent that
+    // handled it.
     const { error } = await db().from("agents").delete().eq("agent_id", agentId);
     if (error) return fail(`Could not delete agent: ${error.message}`);
 
@@ -346,91 +345,6 @@ export async function updateAgentVoice(
 
     revalidatePath(`/agents/${agentId}`);
     return ok("Saved.");
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/* Departments (the transfer directory)                                       */
-/* -------------------------------------------------------------------------- */
-
-export async function saveDepartments(
-  _prev: ActionState,
-  form: FormData,
-): Promise<ActionState> {
-  return guard(async () => {
-    const agentId = str(form, "agent_id");
-    if (!agentId) return fail("Missing agent id.");
-
-    const parsed: {
-      department_id: string | null;
-      department_name: string;
-      transfer_number: string;
-      routing_keywords: string | null;
-    }[] = [];
-
-    for (const row of rows(form, [
-      "department_id",
-      "department_name",
-      "transfer_number",
-      "routing_keywords",
-    ] as const)) {
-      if (!row.department_name && !row.transfer_number) continue;
-      if (!row.department_name) return fail("Each department needs a name.");
-      if (!isE164(row.transfer_number)) {
-        return fail(
-          `"${row.department_name}" needs a transfer number in E.164 format, e.g. +15105550100.`,
-        );
-      }
-      parsed.push({
-        department_id: row.department_id || null,
-        department_name: row.department_name,
-        transfer_number: row.transfer_number,
-        routing_keywords: row.routing_keywords || null,
-      });
-    }
-
-    const existing = (await db()
-      .from("departments")
-      .select("department_id")
-      .eq("agent_id", agentId)) as {
-      data: { department_id: string }[] | null;
-      error: { message: string } | null;
-    };
-    if (existing.error) return fail(`Could not load departments: ${existing.error.message}`);
-
-    const kept = new Set(
-      parsed.map((p) => p.department_id).filter((id): id is string => !!id),
-    );
-    const removed = (existing.data ?? [])
-      .map((d) => d.department_id)
-      .filter((id) => !kept.has(id));
-
-    if (removed.length > 0) {
-      const { error } = await db()
-        .from("departments")
-        .delete()
-        .in("department_id", removed);
-      if (error) return fail(`Could not remove department: ${error.message}`);
-    }
-
-    for (const row of parsed) {
-      const payload = {
-        agent_id: agentId,
-        department_name: row.department_name,
-        transfer_number: row.transfer_number,
-        routing_keywords: row.routing_keywords,
-      };
-      const { error } = row.department_id
-        ? await db()
-            .from("departments")
-            .update(payload)
-            .eq("department_id", row.department_id)
-        : await db().from("departments").insert(payload);
-      if (error) return fail(`Could not save "${row.department_name}": ${error.message}`);
-    }
-
-    revalidatePath(`/agents/${agentId}`);
-    return ok("Departments saved.");
   });
 }
 

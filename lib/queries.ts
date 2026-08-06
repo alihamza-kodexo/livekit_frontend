@@ -5,7 +5,6 @@ import type {
   Agent,
   CallLog,
   CallOutcome,
-  Department,
   ExternalNumber,
   Tool,
 } from "@/lib/types";
@@ -61,17 +60,6 @@ export async function getAgent(agentId: string): Promise<Agent | null> {
     .maybeSingle();
   if (error) throw new Error(`getAgent: ${error.message}`);
   return (data as unknown as Agent) ?? null;
-}
-
-export async function listDepartments(agentId: string): Promise<Department[]> {
-  return (await expect(
-    db()
-      .from("departments")
-      .select("*")
-      .eq("agent_id", agentId)
-      .order("created_at", { ascending: true }),
-    "listDepartments",
-  )) as unknown as Department[];
 }
 
 /** The whole tools library -- shared across every agent (see 0014_global_tools.sql). */
