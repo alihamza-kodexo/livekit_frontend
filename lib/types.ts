@@ -82,7 +82,11 @@ export const CONVERSATION_SETTING_DEFAULTS: Required<ConversationSettings> = {
   max_reply_sentences: 2,
   tts_stability: 0.6,
   speech_rate: 1,
-  vad_threshold_ms: 500,
+  // 300ms, not 500: the worker now runs Deepgram Flux, which decides
+  // end-of-turn from the speech itself, so this is a floor under that decision
+  // rather than the whole of it. 500ms of dead air was being added to every
+  // phone turn on top of PSTN transit, which no setting here can shorten.
+  vad_threshold_ms: 300,
   interruption_sensitivity: 0.5,
   backchannel_frequency: 0.2,
 };
