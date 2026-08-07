@@ -353,6 +353,12 @@ function ConnectedPanelBody({
   // unclaimed dispatch fires no event to react to. Kept separate from the
   // `!agent` check below so a late-joining worker clears the warning by itself.
   useEffect(() => {
+    // Depends on `agent` so the timer is torn down the moment one arrives.
+    // Without that, the timeout still fired 12s in and logged "NO AGENT" about
+    // an agent that had been talking for seven seconds -- the banner was
+    // correctly hidden by the `!agent` check below, but the console said the
+    // opposite, which is worse than saying nothing.
+    if (agent) return;
     const id = setTimeout(() => {
       testLog(
         `NO AGENT after ${AGENT_JOIN_TIMEOUT_MS / 1000}s — the dispatch was created but ` +
@@ -362,7 +368,7 @@ function ConnectedPanelBody({
       setJoinTimedOut(true);
     }, AGENT_JOIN_TIMEOUT_MS);
     return () => clearTimeout(id);
-  }, []);
+  }, [agent]);
 
   const agentMissing = joinTimedOut && !agent;
   const problem = diagnostic !== null || agentMissing;
