@@ -15,7 +15,32 @@ import {
 import { createTestSession } from "@/app/(protected)/agents/[agentId]/test-actions";
 import { Button } from "@/components/ui";
 
-type Session = { token: string; url: string; roomName: string };
+type Session = {
+  token: string;
+  url: string;
+  roomName: string;
+  agentName: string;
+  dispatchId: string | null;
+};
+
+/**
+ * Timeline logger for the browser console, tagged so it's greppable among
+ * livekit-client's own output.
+ *
+ * This exists because a deployed failure gives you almost nothing to go on: the
+ * client connects, publishes, and then simply waits. The interesting question is
+ * always *which* step stopped -- did the dispatch get created, did any
+ * participant arrive, did the agent arrive and leave, did it publish audio -- and
+ * none of that is visible without printing it. The elapsed offset matters as much
+ * as the events: a worker joining at 8s and never joining look the same in a
+ * screenshot of a spinner.
+ */
+const startedAt = Date.now();
+function testLog(event: string, detail?: unknown): void {
+  const at = ((Date.now() - startedAt) / 1000).toFixed(1);
+  if (detail === undefined) console.info(`[kodexo-test +${at}s] ${event}`);
+  else console.info(`[kodexo-test +${at}s] ${event}`, detail);
+}
 
 /** Text-stream topic the worker reports failures on -- must match
  * DIAGNOSTIC_TOPIC in agent-worker/src/worker/entrypoint.py. */
@@ -59,12 +84,22 @@ export function TestAgentPanel({
     setStarting(true);
     setWidgetOpen(true);
     setMinimized(false);
+    testLog("requesting a test session", { agentId });
     const result = await createTestSession(agentId);
     setStarting(false);
     if ("error" in result) {
+      testLog("SESSION REQUEST FAILED", result.error);
       setError(result.error);
       return;
     }
+    testLog("dispatch created — now waiting for the worker to claim it", {
+      room: result.roomName,
+      livekit: result.url,
+      // If no agent ever joins, this is the first thing to check: it must equal
+      // the worker's LIVEKIT_AGENT_NAME on whichever machine is running it.
+      agentName: result.agentName,
+      dispatchId: result.dispatchId,
+    });
     setSession(result);
   }, [agentId]);
 
@@ -108,8 +143,13 @@ export function TestAgentPanel({
               token={session.token}
               audio
               connect
-              onDisconnected={closeWidget}
+              onConnected={() => testLog("browser joined the room")}
+              onDisconnected={(reason) => {
+                testLog("browser left the room", { reason });
+                closeWidget();
+              }}
               onError={(err) => {
+                testLog("ROOM ERROR", err);
                 setError(`Couldn't connect: ${err.message}`);
                 setSession(null);
               }}
@@ -275,17 +315,52 @@ function ConnectedPanelBody({
   // reached the worker's stdout -- on another machine, in production.
   useEffect(() => {
     const handler = async (reader: { readAll: () => Promise<string> }) => {
-      setDiagnostic(await reader.readAll());
+      const text = await reader.readAll();
+      testLog("WORKER REPORTED A FAILURE", text);
+      setDiagnostic(text);
     };
     room.registerTextStreamHandler(DIAGNOSTIC_TOPIC, handler);
     return () => room.unregisterTextStreamHandler(DIAGNOSTIC_TOPIC);
   }, [room]);
 
+  // Participant/track events, logged rather than only rendered: an agent that
+  // joins and immediately leaves is a crashed job, an agent that joins without
+  // publishing audio is a session that never started, and a room that stays
+  // empty is a dispatch nobody claimed. All three look like a spinner on screen.
+  useEffect(() => {
+    const onJoin = (p: { identity: string; kind: unknown }) =>
+      testLog("participant joined", { identity: p.identity, kind: p.kind });
+    const onLeave = (p: { identity: string }) =>
+      testLog("participant LEFT (a crashed job looks like this)", p.identity);
+    const onTrack = (_t: unknown, _pub: unknown, p: { identity: string }) =>
+      testLog("subscribed to audio from", p.identity);
+
+    room.on("participantConnected", onJoin);
+    room.on("participantDisconnected", onLeave);
+    room.on("trackSubscribed", onTrack);
+    return () => {
+      room.off("participantConnected", onJoin);
+      room.off("participantDisconnected", onLeave);
+      room.off("trackSubscribed", onTrack);
+    };
+  }, [room]);
+
+  useEffect(() => {
+    testLog(`agent state: ${state}`);
+  }, [state]);
+
   // Deliberately a plain timer rather than state derived from `agent`: an
   // unclaimed dispatch fires no event to react to. Kept separate from the
   // `!agent` check below so a late-joining worker clears the warning by itself.
   useEffect(() => {
-    const id = setTimeout(() => setJoinTimedOut(true), AGENT_JOIN_TIMEOUT_MS);
+    const id = setTimeout(() => {
+      testLog(
+        `NO AGENT after ${AGENT_JOIN_TIMEOUT_MS / 1000}s — the dispatch was created but ` +
+          `nothing claimed it. Check the worker is running and that its ` +
+          `LIVEKIT_AGENT_NAME and LIVEKIT_URL match the values logged above.`,
+      );
+      setJoinTimedOut(true);
+    }, AGENT_JOIN_TIMEOUT_MS);
     return () => clearTimeout(id);
   }, []);
 

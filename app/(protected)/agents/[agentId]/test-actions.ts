@@ -6,8 +6,26 @@ import { AccessToken, AgentDispatchClient } from "livekit-server-sdk";
 
 import { livekitEnv } from "@/lib/env";
 
-export type TestSession = { token: string; url: string; roomName: string };
+/**
+ * `agentName` and `dispatchId` are returned purely so the browser console can
+ * show them. A dispatch that no worker claims looks identical to a worker that
+ * crashed, and the most common cause of the former is this name not matching the
+ * worker's LIVEKIT_AGENT_NAME -- which is invisible unless both sides are
+ * printed somewhere a person can read them.
+ */
+export type TestSession = {
+  token: string;
+  url: string;
+  roomName: string;
+  agentName: string;
+  dispatchId: string | null;
+};
 export type TestSessionResult = TestSession | { error: string };
+
+/** Must match the worker's LIVEKIT_AGENT_NAME (see agent-worker/settings.py --
+ * it defaults to this same string). A mismatch means dispatches are created
+ * successfully and then silently never claimed. */
+const WORKER_AGENT_NAME = "kodexo-inbound-agent";
 
 /**
  * Starts a browser-testable session with this agent, entirely local to
@@ -23,9 +41,17 @@ export async function createTestSession(agentId: string): Promise<TestSessionRes
     const roomName = `test-${agentId}-${randomUUID().slice(0, 8)}`;
 
     const dispatch = new AgentDispatchClient(httpUrl, apiKey, apiSecret);
-    await dispatch.createDispatch(roomName, "kodexo-inbound-agent", {
+    const created = await dispatch.createDispatch(roomName, WORKER_AGENT_NAME, {
       metadata: JSON.stringify({ test_agent_id: agentId }),
     });
+
+    // Server-side log as well as the browser one: on a deployed box this lands
+    // in the dashboard's journal, which is the only place to see that the
+    // dashboard and the worker disagree about which LiveKit they're using.
+    console.info(
+      `[kodexo-test] dispatch created room=${roomName} agent=${WORKER_AGENT_NAME} ` +
+        `livekit=${url} dispatch=${created.id ?? "?"}`,
+    );
 
     const token = new AccessToken(apiKey, apiSecret, {
       identity: `tester-${randomUUID().slice(0, 8)}`,
@@ -33,8 +59,15 @@ export async function createTestSession(agentId: string): Promise<TestSessionRes
     });
     token.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: true });
 
-    return { token: await token.toJwt(), url, roomName };
+    return {
+      token: await token.toJwt(),
+      url,
+      roomName,
+      agentName: WORKER_AGENT_NAME,
+      dispatchId: created.id ?? null,
+    };
   } catch (error) {
+    console.error("[kodexo-test] dispatch failed", error);
     return {
       error:
         error instanceof Error
