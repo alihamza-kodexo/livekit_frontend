@@ -69,10 +69,16 @@ export function AgentIdentityForm({ agent }: { agent: Agent }) {
             description: AGENT_STATUS_TOOLTIPS[option],
           }))}
         />
+        {/* "Save name" rather than "Save": this form posts only name and status,
+            but it is the most prominent button on the page, so a bare "Save"
+            reads as saving whatever tab you were just editing. It doesn't -- each
+            tab has its own Save -- and the failure is silent and convincing: this
+            one reports success while the voice or prompt you just changed is
+            quietly discarded. Cost real debugging time before it was spotted. */}
         <SubmitButton
           formId={formId}
           variant="secondary"
-          idleLabel="Save"
+          idleLabel="Save name"
           pendingLabel="Saving…"
           pending={pending}
           flash={flash}
