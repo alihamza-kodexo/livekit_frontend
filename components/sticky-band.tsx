@@ -20,7 +20,7 @@ export function StickyBand({
   className,
   children,
 }: {
-  /** Raw CSS `top` value/expression, e.g. `"var(--nav-h, 4rem)"`. */
+  /** Raw CSS `top` value/expression, e.g. `"var(--content-top, 0px)"`. */
   top: string;
   /** CSS custom property name this band's own height gets published to. */
   publishHeightAs?: string;

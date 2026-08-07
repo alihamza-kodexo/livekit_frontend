@@ -29,7 +29,7 @@ export function CallFilters({
   }
 
   return (
-    <form action={apply} className="grid gap-4 sm:grid-cols-5">
+    <form action={apply} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       <Field label="Agent" htmlFor="filter-agent">
         <Dropdown
           id="filter-agent"

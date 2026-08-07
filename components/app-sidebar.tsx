@@ -48,6 +48,14 @@ const GROUPS: NavGroup[] = [
 
 const MOTION = "transition-all duration-200 ease-out";
 
+/** Widths of the rail in its three states, kept together so the drawer and the
+ * desktop rail can't drift apart. */
+const RAIL_WIDTH = {
+  drawer: "max-sm:w-64",
+  collapsed: "sm:w-16",
+  expanded: "sm:w-16 lg:w-60",
+};
+
 /**
  * Collapsing animates rather than snaps: the rail's width, and every label's
  * width/opacity, run on the same 200ms curve.
@@ -61,7 +69,13 @@ const MOTION = "transition-all duration-200 ease-out";
  * and there's no toggle offered at that size, so those labels are plainly
  * hidden with no animation to worry about.
  */
-function labelClass(collapsed: boolean) {
+function labelClass(collapsed: boolean, forceShow: boolean) {
+  // The mobile drawer is 16rem wide, so labels always show there. `forceShow` is
+  // only ever true below `sm` -- the drawer can't be opened at any larger size --
+  // which is why this can drop the `max-lg:hidden` guard outright.
+  if (forceShow) {
+    return `${MOTION} ml-2.5 max-w-40 overflow-hidden whitespace-nowrap opacity-100`;
+  }
   return [
     MOTION,
     "overflow-hidden whitespace-nowrap max-lg:hidden",
@@ -78,6 +92,9 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  // Below `sm` the rail slides in over the content instead of holding a column
+  // of its own -- 4rem of permanent chrome is a fifth of a phone's width.
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   function toggle() {
     const next = !collapsed;
@@ -89,95 +106,140 @@ export function AppSidebar({
   }
 
   return (
-    <aside
-      className={[
-        MOTION,
-        "sticky top-0 z-30 flex h-dvh shrink-0 flex-col border-r border-line bg-canvas-alt",
-        collapsed ? "w-16" : "w-16 lg:w-60",
-      ].join(" ")}
-    >
-      <div className="flex h-16 shrink-0 items-center border-b border-divider px-3">
-        <Link
-          href="/agents"
-          title="Kodexo Voice"
-          className="flex min-w-0 flex-1 items-center"
+    <>
+      {/* Phone-only top bar: the way into the drawer, and the only nav chrome
+          that stays on screen at that size. */}
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-canvas-alt px-4 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open navigation"
+          aria-expanded={drawerOpen}
+          className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface hover:text-strong"
         >
-          <BrandMark size={32} />
-          <span className={labelClass(collapsed)}>
-            <span className="block truncate font-heading text-sm leading-tight font-semibold tracking-tight text-strong">
-              Kodexo Voice
-            </span>
-            <span className="block text-[0.6875rem] leading-tight text-faint">
-              Agent platform
-            </span>
+          <MenuIcon />
+        </button>
+        <Link href="/agents" className="flex items-center gap-2">
+          <BrandMark size={26} />
+          <span className="font-heading text-sm font-semibold tracking-tight text-strong">
+            Kodexo Voice
           </span>
         </Link>
-      </div>
+      </header>
 
-      {/* Sits on the rail's own border, half in and half out. Keeps one fixed,
-          always-visible affordance in both states -- putting it inside the
-          header would either fight the logo for 4rem of width when collapsed,
-          or have to disappear exactly when it's needed most. Only offered from
-          `lg` up, where an expanded rail fits at all. */}
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-        aria-pressed={collapsed}
-        title={collapsed ? "Expand navigation" : "Collapse navigation"}
-        className="absolute top-20 -right-3 z-40 hidden h-6 w-6 items-center justify-center rounded-pill border border-line bg-surface text-faint shadow-sm transition-colors hover:text-brand lg:flex"
+      {drawerOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setDrawerOpen(false)}
+          className="fixed inset-0 z-40 bg-ink/60 backdrop-blur-sm sm:hidden"
+        />
+      )}
+
+      <aside
+        className={[
+          MOTION,
+          "z-50 flex flex-col border-r border-line bg-canvas-alt",
+          // Off-canvas drawer below `sm`, in-flow sticky column above it.
+          "max-sm:fixed max-sm:inset-y-0 max-sm:left-0 max-sm:shadow-lg",
+          RAIL_WIDTH.drawer,
+          drawerOpen ? "max-sm:translate-x-0" : "max-sm:-translate-x-full",
+          "sm:sticky sm:top-0 sm:h-dvh sm:shrink-0 sm:translate-x-0",
+          collapsed ? RAIL_WIDTH.collapsed : RAIL_WIDTH.expanded,
+        ].join(" ")}
       >
-        <CollapseIcon collapsed={collapsed} />
-      </button>
+        <div className="flex h-16 shrink-0 items-center border-b border-divider px-3">
+          <Link
+            href="/agents"
+            title="Kodexo Voice"
+            onClick={() => setDrawerOpen(false)}
+            className="flex min-w-0 flex-1 items-center"
+          >
+            <BrandMark size={32} />
+            <span className={labelClass(collapsed, drawerOpen)}>
+              <span className="block truncate font-heading text-sm leading-tight font-semibold tracking-tight text-strong">
+                Kodexo Voice
+              </span>
+              <span className="block text-[0.6875rem] leading-tight text-faint">
+                Agent platform
+              </span>
+            </span>
+          </Link>
+        </div>
 
-      <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-4 lg:px-3">
-        {GROUPS.map((group) => (
-          <div key={group.heading}>
-            <p
-              className={[
-                MOTION,
-                "mono-kicker overflow-hidden px-2 max-lg:hidden",
-                collapsed ? "mb-0 h-0 opacity-0" : "mb-1.5 h-4 opacity-100",
-              ].join(" ")}
-            >
-              {group.heading}
-            </p>
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                // Detail pages live under /agents/<id>, /calls/<id> and so on,
-                // so the parent stays highlighted by prefix.
-                const active =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      title={item.label}
-                      className={[
-                        MOTION,
-                        "flex items-center rounded-md py-2 text-sm max-lg:justify-center",
-                        collapsed ? "justify-center px-0" : "px-2.5",
-                        active
-                          ? "bg-brand-tint font-semibold text-brand-deep dark:text-brand"
-                          : "font-medium text-muted hover:bg-surface hover:text-strong",
-                      ].join(" ")}
-                    >
-                      {item.icon}
-                      <span className={labelClass(collapsed)}>{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </nav>
+        {/* Sits on the rail's own border, half in and half out. Keeps one fixed,
+            always-visible affordance in both states -- putting it inside the
+            header would either fight the logo for 4rem of width when collapsed,
+            or have to disappear exactly when it's needed most. Only offered from
+            `lg` up, where an expanded rail fits at all. */}
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          aria-pressed={collapsed}
+          title={collapsed ? "Expand navigation" : "Collapse navigation"}
+          className="absolute top-20 -right-3 z-40 hidden h-6 w-6 items-center justify-center rounded-pill border border-line bg-surface text-faint shadow-sm transition-colors hover:text-brand lg:flex"
+        >
+          <CollapseIcon collapsed={collapsed} />
+        </button>
 
-      <div className="shrink-0 border-t border-divider p-2">
-        <ProfileMenu userEmail={userEmail} collapsed={collapsed} />
-      </div>
-    </aside>
+        <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-4 lg:px-3">
+          {GROUPS.map((group) => (
+            <div key={group.heading}>
+              <p
+                className={[
+                  MOTION,
+                  "mono-kicker overflow-hidden px-2",
+                  drawerOpen ? "mb-1.5 h-4 opacity-100" : "max-lg:hidden",
+                  !drawerOpen && (collapsed ? "mb-0 h-0 opacity-0" : "mb-1.5 h-4 opacity-100"),
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {group.heading}
+              </p>
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  // Detail pages live under /agents/<id>, /calls/<id> and so on,
+                  // so the parent stays highlighted by prefix.
+                  const active =
+                    pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        title={item.label}
+                        onClick={() => setDrawerOpen(false)}
+                        className={[
+                          MOTION,
+                          "flex items-center rounded-md py-2 text-sm",
+                          drawerOpen
+                            ? "px-2.5"
+                            : collapsed
+                              ? "justify-center px-0 max-lg:justify-center"
+                              : "px-2.5 max-lg:justify-center",
+                          active
+                            ? "bg-brand-tint font-semibold text-brand-deep dark:text-brand"
+                            : "font-medium text-muted hover:bg-surface hover:text-strong",
+                        ].join(" ")}
+                      >
+                        {item.icon}
+                        <span className={labelClass(collapsed, drawerOpen)}>{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className="shrink-0 border-t border-divider p-2">
+          <ProfileMenu userEmail={userEmail} collapsed={collapsed && !drawerOpen} />
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -233,6 +295,14 @@ function PlugIcon() {
   return (
     <svg {...ICON_PROPS}>
       <path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0V8ZM12 17v5" />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg {...ICON_PROPS} className="h-5 w-5 shrink-0">
+      <path d="M4 6h16M4 12h16M4 18h16" />
     </svg>
   );
 }

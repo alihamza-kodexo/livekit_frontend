@@ -216,7 +216,9 @@ export function Dropdown({
         tabIndex={-1}
         data-open={open}
         className={cx(
-          "dropdown-menu absolute z-50 mt-1 max-h-72 min-w-full overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-lg",
+          // Clamped to the viewport so a menu wider than its trigger (or one
+          // aligned to the right edge) can't run off a phone screen.
+          "dropdown-menu absolute z-50 mt-1 max-h-72 max-w-[calc(100vw-2rem)] min-w-full overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-lg",
           align === "end" ? "right-0" : "left-0",
           menuClassName,
         )}

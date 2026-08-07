@@ -23,7 +23,7 @@ export async function IntegrationAlertBanner() {
   if (broken.length === 0) return null;
 
   return (
-    <div className="shrink-0 border-b border-error-border bg-error-bg px-6 py-3 lg:px-8">
+    <div className="shrink-0 border-b border-error-border bg-error-bg px-4 py-3 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3">
         <span className="text-sm font-semibold text-error-text">
           {broken.length} integration{broken.length === 1 ? "" : "s"} configured but not working:

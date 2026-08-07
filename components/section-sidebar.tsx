@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
  */
 export function SectionSidebar({ children }: { children: ReactNode }) {
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-canvas lg:sticky lg:top-0 lg:h-dvh lg:w-64 lg:border-b-0 lg:border-r">
+    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-canvas lg:sticky lg:top-[var(--content-top,0px)] lg:h-dvh lg:w-64 lg:border-b-0 lg:border-r">
       {children}
     </aside>
   );
@@ -49,7 +49,9 @@ export function SectionSidebarHeader({
 /** Scrollable list region below the header. */
 export function SectionSidebarBody({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-0 max-h-72 flex-1 space-y-3 overflow-y-auto p-3 lg:max-h-none">
+    // Capped short on a phone -- this rail stacks above the content there, so a
+    // tall list would push the thing you actually opened off the screen.
+    <div className="max-h-56 min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:max-h-72 lg:max-h-none">
       {children}
     </div>
   );

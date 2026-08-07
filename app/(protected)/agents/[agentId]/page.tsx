@@ -49,9 +49,11 @@ export default async function AgentPage({
       {/* Bleeds out to the page gutters and re-pads, so scrolled content can't
           show through beside it once it's stuck. */}
       <StickyBand
-        top="0px"
+        top="var(--content-top, 0px)"
         publishHeightAs="--agent-header-h"
-        className="z-10 -mx-6 bg-canvas px-6 pt-7 pb-5 lg:-mx-8 lg:px-8"
+        // Negative margins have to track PageBody's own gutters at every
+        // breakpoint, or the band stops covering the full content width.
+        className="z-10 -mx-4 bg-canvas px-4 pt-5 pb-4 sm:-mx-6 sm:px-6 sm:pt-6 lg:-mx-8 lg:px-8 lg:pt-7 lg:pb-5"
       >
         <PageHeader
           title={agent.name}
@@ -87,7 +89,7 @@ export default async function AgentPage({
       <Tabs
         key={defaultTab ?? "default"}
         defaultTab={defaultTab}
-        stickyTop="var(--agent-header-h, 6rem)"
+        stickyTop="calc(var(--content-top, 0px) + var(--agent-header-h, 6rem))"
         tabs={[
           {
             key: "prompt",

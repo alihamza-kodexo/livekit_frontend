@@ -40,7 +40,9 @@ export function PageBody({
   return (
     <div
       className={cx(
-        "mx-auto w-full max-w-7xl flex-1 space-y-6 px-6 py-7 lg:px-8",
+        // Gutters tighten on small screens -- 24px each side costs a sixth of a
+        // 320px viewport, which is content, not whitespace.
+        "mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-6 lg:px-8 lg:py-7",
         className,
       )}
     >
@@ -63,11 +65,13 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4 border-b border-line pb-6">
-      <div className="min-w-0">
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-line pb-5 sm:pb-6">
+      <div className="min-w-0 flex-1">
         {/* Statement face, per the identity's H1 rule -- the base styles in
             globals.css carry the family/weight, so this only sets size. */}
-        <h1 className="text-2xl">{title}</h1>
+        {/* Wraps rather than overflowing -- an agent name can be long, and the
+            statement face is set tight. */}
+        <h1 className="text-xl break-words sm:text-2xl">{title}</h1>
         {meta && (
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
             {meta}
@@ -80,7 +84,11 @@ export function PageHeader({
         )}
       </div>
       {actions && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        // Wraps onto its own full-width row below `sm` rather than being
+        // squeezed beside the title.
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+          {actions}
+        </div>
       )}
     </div>
   );
@@ -107,7 +115,7 @@ export function Card({
       )}
     >
       {(title || description || actions) && (
-        <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-divider px-6 py-4">
+        <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-divider px-4 py-4 sm:px-6">
           <div className="min-w-0">
             {title && (
               <h2 className="font-heading text-sm font-semibold text-strong">
@@ -125,7 +133,7 @@ export function Card({
           )}
         </header>
       )}
-      <div className="p-6">{children}</div>
+      <div className="p-4 sm:p-6">{children}</div>
     </section>
   );
 }
@@ -164,7 +172,7 @@ export function CollapsibleCard({
 }) {
   return (
     <details className="group rounded-lg border border-line bg-surface shadow-sm">
-      <summary className="flex cursor-pointer list-none items-start gap-2.5 px-6 py-4 marker:content-none">
+      <summary className="flex cursor-pointer list-none items-start gap-2.5 px-4 py-4 marker:content-none sm:px-6">
         <Chevron />
         <div className="min-w-0">
           {title && (
@@ -179,7 +187,7 @@ export function CollapsibleCard({
           )}
         </div>
       </summary>
-      <div className="border-t border-divider p-6">{children}</div>
+      <div className="border-t border-divider p-4 sm:p-6">{children}</div>
     </details>
   );
 }
@@ -213,7 +221,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-line px-6 py-12 text-center">
+    <div className="rounded-lg border border-dashed border-line px-4 py-10 text-center sm:px-6 sm:py-12">
       <p className="font-heading text-sm font-semibold text-strong">{title}</p>
       {description && (
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">

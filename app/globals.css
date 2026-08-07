@@ -35,6 +35,20 @@
 :root { color-scheme: light; }
 [data-theme="dark"] { color-scheme: dark; }
 
+/*
+ * How far down the viewport the content area actually starts.
+ *
+ * Below `sm` the nav rail becomes a drawer behind a fixed 3.5rem top bar (see
+ * components/app-sidebar.tsx), so anything sticking to the top of the content
+ * column has to clear it. From `sm` up the rail is an in-flow column and there
+ * is nothing overlapping. Sticky offsets read this rather than hardcoding a
+ * breakpoint each, since an inline `style={{ top }}` can't hold a media query.
+ */
+:root { --content-top: 3.5rem; }
+@media (min-width: 40rem) {
+  :root { --content-top: 0px; }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Local extension: dark fills for the semantic families                      */
 /* -------------------------------------------------------------------------- */

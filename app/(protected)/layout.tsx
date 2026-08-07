@@ -37,7 +37,10 @@ export default async function ProtectedLayout({
   return (
     <div className="flex min-h-dvh">
       <AppSidebar userEmail={user.email} defaultCollapsed={navCollapsed} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* `pt-14` clears the phone-only fixed top bar the rail renders below
+          `sm`; from `sm` up the rail is an in-flow column and there's nothing
+          overlapping to clear. */}
+      <div className="flex min-w-0 flex-1 flex-col pt-14 sm:pt-0">
         <IntegrationAlertBanner />
         {children}
       </div>

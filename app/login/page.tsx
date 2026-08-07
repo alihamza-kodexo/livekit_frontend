@@ -36,7 +36,7 @@ export default async function LoginPage({
   return (
     <div className="grid min-h-dvh flex-1 lg:grid-cols-2">
       {/* Form side */}
-      <div className="flex flex-col items-center justify-center px-6 py-14 sm:px-10">
+      <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-10 sm:py-14">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center justify-center gap-3">
             <BrandMark size={36} />
@@ -45,7 +45,7 @@ export default async function LoginPage({
             </span>
           </div>
 
-          <div className="rounded-xl border border-line bg-surface p-7 shadow-lg">
+          <div className="rounded-xl border border-line bg-surface p-5 shadow-lg sm:p-7">
             <div className="mb-6 text-center">
               <h1 className="text-2xl">Sign in to your account</h1>
               <p className="mt-2 text-sm text-muted">
