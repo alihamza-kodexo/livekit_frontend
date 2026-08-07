@@ -46,7 +46,7 @@ const LLM_PROVIDER_LABELS: Record<LLMProvider, string> = {
 const LLM_PROVIDER_TOOLTIPS: Record<LLMProvider, string> = {
   groq: "Fast responses via Llama 3.3 70B on Groq's LPU hardware. Best default for natural call latency.",
   deepseek: "Cheaper per output token than Groq, but DeepSeek's API adds roughly 1.5s of extra latency per turn -- noticeable to callers.",
-  gemini_live: "Google's realtime speech-to-speech model. Skips separate STT/TTS entirely, so it's the cheapest option -- but it can't use the pronunciation dictionary or most tuning settings below.",
+  gemini_live: "Google's realtime speech-to-speech model. Skips separate STT/TTS entirely, so it's the cheapest option -- but it can't use the pronunciation dictionary, and it decides turn-taking itself rather than through the settings below.",
 };
 
 const FIRST_MESSAGE_LABELS: Record<FirstMessageMode, string> = {
@@ -214,10 +214,17 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
  * `appliesTo` is the honest answer to "does moving this actually change a
  * call?", read off the worker rather than assumed:
  *
- *  - "all"      -- reaches every engine. temperature and max_reply_sentences go
- *                  into the model/prompt; the two turn-taking values go into
- *                  AgentSession's TurnHandlingOptions, which wraps the realtime
- *                  model too (see entrypoint.py `_turn_handling_from_settings`).
+ *  - "all"      -- reaches every engine, though not always by the same route.
+ *                  temperature and max_reply_sentences go into the
+ *                  model/prompt. The two turn-taking values go into
+ *                  AgentSession's TurnHandlingOptions on the STT/LLM/TTS
+ *                  pipeline, but a realtime model owns turn-taking outright and
+ *                  discards those options, so for Gemini Live the worker
+ *                  translates them into Gemini's own activity-detection config
+ *                  instead -- same intent, different mechanism and slightly
+ *                  different units. `realtimeNote` spells out the difference on
+ *                  the field itself; see entrypoint.py
+ *                  `_gemini_activity_detection`.
  *  - "none"     -- stored, but nothing consumes it today. Deepgram Aura exposes
  *                  no stability or rate control and the worker has no
  *                  backchannel behaviour, so these are placeholders for a TTS
@@ -250,6 +257,8 @@ const TUNING_FIELDS = [
     max: 3000,
     hint: "Too low and the agent talks over a caller who paused to think.",
     appliesTo: "all",
+    realtimeNote:
+      "On Gemini Live this becomes Gemini's own silence timer, with a 500ms floor — its detector is purely time-based, so anything shorter cuts callers off mid-pause.",
   },
   {
     name: "interruption_sensitivity",
@@ -259,6 +268,8 @@ const TUNING_FIELDS = [
     max: 1,
     hint: "How readily barge-in stops the agent mid-sentence.",
     appliesTo: "all",
+    realtimeNote:
+      "On Gemini Live this sets how long speech has to persist before it counts as barge-in. Lower it if background noise is stopping the agent mid-sentence.",
   },
   {
     name: "tts_stability",
@@ -437,6 +448,11 @@ export function VoiceConfigForm({ agent }: { agent: Agent }) {
                   Saved, but nothing reads it yet — Deepgram Aura has no such
                   control.
                 </InactiveNote>
+              )}
+              {realtime && "realtimeNote" in field && (
+                <p className="text-[0.6875rem] leading-relaxed text-muted">
+                  {field.realtimeNote}
+                </p>
               )}
             </Field>
           ))}
