@@ -7,25 +7,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   not_allowed: "That account isn't authorized for this dashboard.",
 };
 
-/** What the platform actually does, on the panel beside the form. Deliberately
- * describes this system's own capabilities rather than borrowing the
- * testimonial slot a public SaaS would put here -- there's nobody to quote on
- * an internal tool. */
-const HIGHLIGHTS = [
-  {
-    title: "Build the agent, not the plumbing",
-    body: "Prompt, voice, qualification criteria and tools -- all configured here, read live by the worker on the next call.",
-  },
-  {
-    title: "Bring your own numbers",
-    body: "Route a Twilio number through the shared SIP trunk and pick which agent answers it. No console spelunking.",
-  },
-  {
-    title: "Hear it before your callers do",
-    body: "Talk to any agent straight from the browser, transcript side by side, before it ever picks up a real call.",
-  },
-];
-
 export default async function LoginPage({
   searchParams,
 }: PageProps<"/login">) {
@@ -93,9 +74,9 @@ export default async function LoginPage({
         </div>
       </div>
 
-      {/* Feature side. Static by design -- a dot lattice and one brand wash,
-          no canvas and nothing animating behind the form. Hidden outright on
-          narrow screens instead of stacking below the fold. */}
+      {/* Purely decorative side panel: a dot lattice and one brand wash, no
+          copy. Static by design -- no canvas and nothing animating. Hidden
+          outright on narrow screens rather than stacking below the fold. */}
       <div className="relative hidden overflow-hidden border-l border-line bg-canvas-alt lg:block">
         <div
           aria-hidden
@@ -115,26 +96,6 @@ export default async function LoginPage({
               "radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, var(--brand-red) 18%, transparent) 0%, transparent 60%)",
           }}
         />
-
-        <div className="relative flex h-full flex-col justify-center px-12 py-16">
-          <p className="mono-kicker">Voice agent platform</p>
-          <h2 className="mt-3 max-w-md font-display text-3xl leading-tight font-black tracking-[0.02em] text-strong">
-            Inbound calls, answered the way you scripted them.
-          </h2>
-
-          <dl className="mt-10 max-w-md space-y-6">
-            {HIGHLIGHTS.map((item) => (
-              <div key={item.title} className="border-l-2 border-brand pl-4">
-                <dt className="font-heading text-sm font-semibold text-strong">
-                  {item.title}
-                </dt>
-                <dd className="mt-1 text-sm leading-relaxed text-muted">
-                  {item.body}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
       </div>
     </div>
   );
