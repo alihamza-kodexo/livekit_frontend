@@ -17,6 +17,18 @@ import { Button } from "@/components/ui";
 
 type Session = { token: string; url: string; roomName: string };
 
+/** Text-stream topic the worker reports failures on -- must match
+ * DIAGNOSTIC_TOPIC in agent-worker/src/worker/entrypoint.py. */
+const DIAGNOSTIC_TOPIC = "kodexo.diagnostic";
+
+/**
+ * How long to wait for the worker to join before saying so. A dispatch that no
+ * worker picks up produces no event at all -- nothing errors, nothing arrives,
+ * and the panel would otherwise read "Connecting" indefinitely. Generous enough
+ * to cover a cold worker loading its VAD model on first job.
+ */
+const AGENT_JOIN_TIMEOUT_MS = 12_000;
+
 /**
  * Talk to this agent directly through the browser, entirely local to whatever
  * LiveKit server is configured -- no Twilio/SIP involved. Explicitly
@@ -255,6 +267,30 @@ function ConnectedPanelBody({
   const transcriptions = useTranscriptions();
   const elapsed = useElapsedSeconds();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [diagnostic, setDiagnostic] = useState<string | null>(null);
+  const [joinTimedOut, setJoinTimedOut] = useState(false);
+
+  // The worker reports why a call failed on its own topic (a missing provider
+  // key, a paused agent, a deleted agent). Without this the failure only ever
+  // reached the worker's stdout -- on another machine, in production.
+  useEffect(() => {
+    const handler = async (reader: { readAll: () => Promise<string> }) => {
+      setDiagnostic(await reader.readAll());
+    };
+    room.registerTextStreamHandler(DIAGNOSTIC_TOPIC, handler);
+    return () => room.unregisterTextStreamHandler(DIAGNOSTIC_TOPIC);
+  }, [room]);
+
+  // Deliberately a plain timer rather than state derived from `agent`: an
+  // unclaimed dispatch fires no event to react to. Kept separate from the
+  // `!agent` check below so a late-joining worker clears the warning by itself.
+  useEffect(() => {
+    const id = setTimeout(() => setJoinTimedOut(true), AGENT_JOIN_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, []);
+
+  const agentMissing = joinTimedOut && !agent;
+  const problem = diagnostic !== null || agentMissing;
 
   const messages = useMemo(
     () =>
@@ -282,10 +318,28 @@ function ConnectedPanelBody({
         <>
           <PanelHeader onClose={onClose} />
           <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4">
+            {problem && (
+              <div className="space-y-1.5 rounded-md border border-error-border bg-error-bg px-3 py-2.5">
+                <p className="font-heading text-sm font-semibold text-error-text">
+                  {diagnostic ? "The agent couldn't start" : "No agent joined"}
+                </p>
+                <p className="text-[0.8125rem] leading-relaxed text-error-text">
+                  {diagnostic ??
+                    `Nothing picked up this call within ${
+                      AGENT_JOIN_TIMEOUT_MS / 1000
+                    }s. Either the worker isn't running (or is registered under a different agent name), or it's still starting up on a loaded machine — this clears itself if it arrives late.`}
+                </p>
+                <p className="pt-0.5 font-mono text-[0.6875rem] break-all text-faint">
+                  room {room.name}
+                </p>
+              </div>
+            )}
             {messages.length === 0 ? (
-              <p className="mt-16 text-center text-sm text-faint">
-                Waiting for conversation…
-              </p>
+              !problem && (
+                <p className="mt-16 text-center text-sm text-faint">
+                  Waiting for conversation…
+                </p>
+              )
             ) : (
               messages.map((message) => (
                 <div
@@ -308,7 +362,8 @@ function ConnectedPanelBody({
         </>
       )}
       <StatusBar
-        statusLabel={STATE_LABEL[state] ?? state}
+        statusLabel={problem ? "Problem" : (STATE_LABEL[state] ?? state)}
+        stalled={problem}
         agentName={agentName}
         elapsedLabel={formatElapsed(elapsed)}
         minimized={minimized}
@@ -332,6 +387,7 @@ function StatusBar({
   onMute,
   muted,
   onHangUp,
+  stalled = false,
 }: {
   statusLabel: string;
   agentName: string;
@@ -341,6 +397,9 @@ function StatusBar({
   onMute?: () => void;
   muted?: boolean;
   onHangUp?: () => void;
+  /** Stops the dot pulsing. Minimized, this bar is the only thing on screen, so
+   * a pulse next to "Problem" would still read as "working on it". */
+  stalled?: boolean;
 }) {
   return (
     <div
@@ -352,7 +411,10 @@ function StatusBar({
     >
       <div className="flex items-center justify-between">
         <span className="mono-kicker flex items-center gap-1.5">
-          <span aria-hidden className="h-1.5 w-1.5 rounded-pill bg-brand brand-pulse" />
+          <span
+            aria-hidden
+            className={`h-1.5 w-1.5 rounded-pill bg-brand ${stalled ? "" : "brand-pulse"}`}
+          />
           {statusLabel}
         </span>
         <button
