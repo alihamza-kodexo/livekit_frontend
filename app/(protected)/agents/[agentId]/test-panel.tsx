@@ -8,9 +8,11 @@ import {
   RoomAudioRenderer,
   useLocalParticipant,
   useRoomContext,
+  useTrackVolume,
   useTranscriptions,
   useVoiceAssistant,
 } from "@livekit/components-react";
+import { Track, type LocalAudioTrack } from "livekit-client";
 
 import { createTestSession } from "@/app/(protected)/agents/[agentId]/test-actions";
 import { Button } from "@/components/ui";
@@ -373,6 +375,18 @@ function ConnectedPanelBody({
   const agentMissing = joinTimedOut && !agent;
   const problem = diagnostic !== null || agentMissing;
 
+  // "The agent can't hear me" is otherwise pure guesswork: the track publishes
+  // successfully whether or not the microphone is actually capturing anything, so
+  // a muted input, a dead default device, or permission granted to the wrong one
+  // all look identical to a working mic. This reads the level off the published
+  // track, which is the same audio the agent receives -- if this doesn't move
+  // while you speak, nothing downstream was ever going to hear you.
+  const micTrack = localParticipant
+    .getTrackPublication(Track.Source.Microphone)
+    ?.audioTrack as LocalAudioTrack | undefined;
+  const micLevel = useTrackVolume(micTrack);
+  const micLive = isMicrophoneEnabled && micLevel > 0.01;
+
   const messages = useMemo(
     () =>
       [...transcriptions]
@@ -445,6 +459,8 @@ function ConnectedPanelBody({
       <StatusBar
         statusLabel={problem ? "Problem" : (STATE_LABEL[state] ?? state)}
         stalled={problem}
+        micLevel={isMicrophoneEnabled ? micLevel : 0}
+        micLive={micLive}
         agentName={agentName}
         elapsedLabel={formatElapsed(elapsed)}
         minimized={minimized}
@@ -469,6 +485,8 @@ function StatusBar({
   muted,
   onHangUp,
   stalled = false,
+  micLevel = 0,
+  micLive = false,
 }: {
   statusLabel: string;
   agentName: string;
@@ -481,6 +499,10 @@ function StatusBar({
   /** Stops the dot pulsing. Minimized, this bar is the only thing on screen, so
    * a pulse next to "Problem" would still read as "working on it". */
   stalled?: boolean;
+  /** 0..1 level of the published mic track. */
+  micLevel?: number;
+  /** Whether that level is actually above the noise floor. */
+  micLive?: boolean;
 }) {
   return (
     <div
@@ -519,9 +541,26 @@ function StatusBar({
             <ChatIcon />
           </IconButton>
           {onMute && (
-            <IconButton active={muted} onClick={onMute} label={muted ? "Unmute" : "Mute"}>
-              {muted ? <MicOffIcon /> : <MicIcon />}
-            </IconButton>
+            <span className="flex items-center gap-1.5">
+              <IconButton active={muted} onClick={onMute} label={muted ? "Unmute" : "Mute"}>
+                {muted ? <MicOffIcon /> : <MicIcon />}
+              </IconButton>
+              {/* Scaled x4 because normal speech sits low on a 0..1 RMS scale --
+                  unscaled, a perfectly good microphone barely nudges the bar and
+                  reads as broken. */}
+              <span
+                aria-hidden
+                title={micLive ? "Your microphone is being heard" : "No input detected"}
+                className="flex h-6 w-1.5 items-end overflow-hidden rounded-pill bg-line"
+              >
+                <span
+                  className={`w-full rounded-pill transition-[height] duration-75 ${
+                    micLive ? "bg-success-text" : "bg-transparent"
+                  }`}
+                  style={{ height: `${Math.min(100, micLevel * 400)}%` }}
+                />
+              </span>
+            </span>
           )}
           {onHangUp && (
             <button
