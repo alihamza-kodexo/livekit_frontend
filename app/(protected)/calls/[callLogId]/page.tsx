@@ -8,6 +8,7 @@ import {
   Duration,
   Mono,
   OutcomeBadge,
+  PageBody,
   PageHeader,
   Timestamp,
 } from "@/components/ui";
@@ -24,7 +25,7 @@ export default async function CallDetailPage({
   const agent = call.agent_id ? await getAgent(call.agent_id) : null;
 
   return (
-    <>
+    <PageBody>
       <PageHeader
         title="Call detail"
         actions={<ButtonLink href="/calls">All calls</ButtonLink>}
@@ -44,7 +45,7 @@ export default async function CallDetailPage({
           </Detail>
           <Detail label="Caller">
             {call.is_test ? (
-              <span className="text-zinc-400">no phone number — browser test</span>
+              <span className="text-faint">no phone number — browser test</span>
             ) : call.caller_number ? (
               <Mono>{call.caller_number}</Mono>
             ) : (
@@ -61,7 +62,7 @@ export default async function CallDetailPage({
             {agent ? (
               <Link
                 href={`/agents/${agent.agent_id}`}
-                className="text-blue-600 hover:underline dark:text-blue-400"
+                className="font-medium text-brand-deep underline-offset-2 hover:underline dark:text-brand"
               >
                 {agent.name}
               </Link>
@@ -83,8 +84,8 @@ export default async function CallDetailPage({
         </dl>
 
         {call.lead_need && (
-          <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-            <dt className="text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+          <div className="mt-6 border-t border-divider pt-5">
+            <dt className="mono-kicker">
               What they need
             </dt>
             <dd className="mt-1 text-sm">{call.lead_need}</dd>
@@ -102,16 +103,16 @@ export default async function CallDetailPage({
 
       <Card title="Transcript">
         {call.transcript ? (
-          <pre className="max-h-[32rem] overflow-auto rounded-md bg-zinc-50 p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap dark:bg-zinc-900">
+          <pre className="max-h-[32rem] overflow-auto rounded-md bg-canvas-alt p-4 font-mono text-[0.8125rem] leading-relaxed whitespace-pre-wrap">
             {call.transcript}
           </pre>
         ) : (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-muted">
             No transcript was recorded for this call.
           </p>
         )}
       </Card>
-    </>
+    </PageBody>
   );
 }
 
@@ -124,7 +125,7 @@ function Detail({
 }) {
   return (
     <div>
-      <dt className="text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+      <dt className="mono-kicker">
         {label}
       </dt>
       <dd className="mt-1">{children}</dd>

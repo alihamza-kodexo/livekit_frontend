@@ -8,6 +8,7 @@ import {
   EmptyState,
   ErrorNotice,
   Mono,
+  PageBody,
   PageHeader,
 } from "@/components/ui";
 import { integrationStatus } from "@/lib/env";
@@ -20,19 +21,19 @@ export default async function NumbersPage() {
 
   if (!status.supabase) {
     return (
-      <>
+      <PageBody>
         <PageHeader title="Numbers" />
         <ConfigNotice
           integration="Supabase"
           vars={["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]}
         />
-      </>
+      </PageBody>
     );
   }
 
   if (!status.twilio) {
     return (
-      <>
+      <PageBody>
         <PageHeader title="Numbers" />
         <ConfigNotice
           integration="Twilio"
@@ -42,13 +43,13 @@ export default async function NumbersPage() {
             "TWILIO_SIP_TRUNK_SID",
           ]}
         />
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="max-w-3xl text-sm leading-relaxed text-muted">
           <Code>TWILIO_SIP_TRUNK_SID</Code> is the SID of the one shared Elastic
           SIP Trunk (it starts with <Code>TK</Code>). Create that trunk once by
           hand, point its origination URI at the LiveKit SIP endpoint, and this
           page manages the numbers on it from then on.
         </p>
-      </>
+      </PageBody>
     );
   }
 
@@ -74,7 +75,7 @@ export default async function NumbersPage() {
 
   if (!numbersResult.ok) {
     return (
-      <>
+      <PageBody>
         <PageHeader title="Numbers" />
         <ErrorNotice>
           Couldn&apos;t reach Twilio:{" "}
@@ -82,7 +83,7 @@ export default async function NumbersPage() {
             ? numbersResult.error.message
             : "unknown error"}
         </ErrorNotice>
-      </>
+      </PageBody>
     );
   }
 
@@ -112,7 +113,7 @@ export default async function NumbersPage() {
   const orphaned = [...assignments.entries()].filter(([number]) => !owned.has(number));
 
   return (
-    <>
+    <PageBody>
       <PageHeader
         title="Numbers"
         description="Route numbers through the shared SIP trunk and pick which agent answers each one."
@@ -178,10 +179,8 @@ export default async function NumbersPage() {
       >
         <dl className="space-y-4 text-sm">
           <div>
-            <dt className="font-medium text-zinc-800 dark:text-zinc-200">
-              Twilio shared trunk
-            </dt>
-            <dd className="mt-1 text-zinc-600 dark:text-zinc-400">
+            <dt className="mono-kicker">Twilio shared trunk</dt>
+            <dd className="mt-1.5 text-muted">
               {trunkResult.ok ? (
                 <>
                   <Mono>{trunkResult.data.friendlyName}</Mono> (
@@ -191,13 +190,13 @@ export default async function NumbersPage() {
                       <Mono key={uri}>{uri}</Mono>
                     ))
                   ) : (
-                    <span className="text-red-600 dark:text-red-400">
+                    <span className="text-error-text">
                       no origination URI set — inbound calls have nowhere to go
                     </span>
                   )}
                 </>
               ) : (
-                <span className="text-red-600 dark:text-red-400">
+                <span className="text-error-text">
                   Couldn&apos;t read the trunk:{" "}
                   {trunkResult.error instanceof Error
                     ? trunkResult.error.message
@@ -209,7 +208,7 @@ export default async function NumbersPage() {
           <LiveKitStatus configured={status.livekit} />
         </dl>
       </Card>
-    </>
+    </PageBody>
   );
 }
 
@@ -217,10 +216,8 @@ async function LiveKitStatus({ configured }: { configured: boolean }) {
   if (!configured) {
     return (
       <div>
-        <dt className="font-medium text-zinc-800 dark:text-zinc-200">
-          LiveKit SIP
-        </dt>
-        <dd className="mt-1 text-zinc-600 dark:text-zinc-400">
+        <dt className="mono-kicker">LiveKit SIP</dt>
+        <dd className="mt-1 text-muted">
           Not configured — set <Code>LIVEKIT_URL</Code>,{" "}
           <Code>LIVEKIT_API_KEY</Code> and <Code>LIVEKIT_API_SECRET</Code> to see
           trunk and dispatch status here.
@@ -235,10 +232,8 @@ async function LiveKitStatus({ configured }: { configured: boolean }) {
   } catch (error) {
     return (
       <div>
-        <dt className="font-medium text-zinc-800 dark:text-zinc-200">
-          LiveKit SIP
-        </dt>
-        <dd className="mt-1 text-red-600 dark:text-red-400">
+        <dt className="mono-kicker">LiveKit SIP</dt>
+        <dd className="mt-1 text-error-text">
           Couldn&apos;t reach LiveKit:{" "}
           {error instanceof Error ? error.message : "unknown error"}
         </dd>
@@ -248,12 +243,10 @@ async function LiveKitStatus({ configured }: { configured: boolean }) {
 
   return (
     <div>
-      <dt className="font-medium text-zinc-800 dark:text-zinc-200">
-        LiveKit SIP
-      </dt>
-      <dd className="mt-1 space-y-1 text-zinc-600 dark:text-zinc-400">
+      <dt className="mono-kicker">LiveKit SIP</dt>
+      <dd className="mt-1 space-y-1 text-muted">
         {config.trunks.length === 0 ? (
-          <p className="text-red-600 dark:text-red-400">
+          <p className="text-error-text">
             No inbound trunk — LiveKit will reject every call. Create one per
             infra/README.md step 4.
           </p>
@@ -268,7 +261,7 @@ async function LiveKitStatus({ configured }: { configured: boolean }) {
           ))
         )}
         {config.dispatchRules.length === 0 ? (
-          <p className="text-red-600 dark:text-red-400">
+          <p className="text-error-text">
             No dispatch rule — calls will land in LiveKit but no agent worker
             gets dispatched.
           </p>
@@ -280,7 +273,7 @@ async function LiveKitStatus({ configured }: { configured: boolean }) {
               {rule.agentNames.length > 0 ? (
                 rule.agentNames.map((name) => <Mono key={name}>{name}</Mono>)
               ) : (
-                <span className="text-amber-700 dark:text-amber-400">
+                <span className="text-warning-text">
                   none named
                 </span>
               )}

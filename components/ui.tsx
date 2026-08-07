@@ -3,6 +3,13 @@
  *
  * Deliberately plain Tailwind rather than a component library — the dashboard
  * is a handful of admin screens, and the whole surface fits in one file.
+ *
+ * Every colour, radius, shadow and face here comes from the Kodexo Labs
+ * visual identity via the semantic utilities set up in app/globals.css
+ * (bg-surface, text-muted, border-line, ...). Those resolve through custom
+ * properties that flip with the theme, so nothing in this file needs a `dark:`
+ * variant -- if you find yourself reaching for a raw palette value or a
+ * `dark:` pair, the token for it probably already exists.
  */
 
 import Link from "next/link";
@@ -18,28 +25,63 @@ function cx(...classes: (string | false | null | undefined)[]) {
 /* Layout                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The padded content column every page sits in. Explicit per page rather than
+ * baked into the protected layout, because /agents puts its own second rail
+ * (see components/section-sidebar.tsx) beside this instead of inside it.
+ */
+export function PageBody({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "mx-auto w-full max-w-7xl flex-1 space-y-6 px-6 py-7 lg:px-8",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   description,
+  meta,
   actions,
 }: {
   title: string;
   description?: string;
+  /** A row of small facts about the thing being edited -- rendered directly
+   * under the title, ahead of any description. */
+  meta?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-800">
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4 border-b border-line pb-6">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          {title}
-        </h1>
+        {/* Statement face, per the identity's H1 rule -- the base styles in
+            globals.css carry the family/weight, so this only sets size. */}
+        <h1 className="text-2xl">{title}</h1>
+        {meta && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
+            {meta}
+          </div>
+        )}
         {description && (
-          <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
             {description}
           </p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+      )}
     </div>
   );
 }
@@ -48,34 +90,64 @@ export function Card({
   title,
   description,
   actions,
+  className,
   children,
 }: {
   title?: string;
   description?: string;
   actions?: ReactNode;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <section
+      className={cx(
+        "rounded-lg border border-line bg-surface shadow-sm",
+        className,
+      )}
+    >
       {(title || description || actions) && (
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+        <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-divider px-6 py-4">
           <div className="min-w-0">
             {title && (
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              <h2 className="font-heading text-sm font-semibold text-strong">
                 {title}
               </h2>
             )}
             {description && (
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted">
                 {description}
               </p>
             )}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+          {actions && (
+            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          )}
         </header>
       )}
-      <div className="p-5">{children}</div>
+      <div className="p-6">{children}</div>
     </section>
+  );
+}
+
+/** `Card`'s shell with no padding of its own -- for content that owns its own
+ * internal layout, like the tools library's list-plus-detail split. */
+export function Panel({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cx(
+        "overflow-hidden rounded-lg border border-line bg-surface shadow-sm",
+        className,
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -91,25 +163,43 @@ export function CollapsibleCard({
   children: ReactNode;
 }) {
   return (
-    <details className="group rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <summary className="flex cursor-pointer list-none items-start gap-2 px-5 py-4 marker:content-none">
-        <span
-          aria-hidden
-          className="mt-0.5 shrink-0 text-zinc-400 transition-transform group-open:rotate-90 dark:text-zinc-500"
-        >
-          ▸
-        </span>
+    <details className="group rounded-lg border border-line bg-surface shadow-sm">
+      <summary className="flex cursor-pointer list-none items-start gap-2.5 px-6 py-4 marker:content-none">
+        <Chevron />
         <div className="min-w-0">
           {title && (
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+            <h2 className="font-heading text-sm font-semibold text-strong">
+              {title}
+            </h2>
           )}
           {description && (
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted">
+              {description}
+            </p>
           )}
         </div>
       </summary>
-      <div className="border-t border-zinc-200 p-5 dark:border-zinc-800">{children}</div>
+      <div className="border-t border-divider p-6">{children}</div>
     </details>
+  );
+}
+
+/** The disclosure triangle used by every `<details>` in the app -- rotates on
+ * open via the `group-open` variant on its parent `<summary>`'s group. */
+export function Chevron() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.25}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
   );
 }
 
@@ -123,16 +213,14 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-zinc-300 px-6 py-10 text-center dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-        {title}
-      </p>
+    <div className="rounded-lg border border-dashed border-line px-6 py-12 text-center">
+      <p className="font-heading text-sm font-semibold text-strong">{title}</p>
       {description && (
-        <p className="mx-auto mt-1 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
           {description}
         </p>
       )}
-      {action && <div className="mt-4 flex justify-center">{action}</div>}
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
     </div>
   );
 }
@@ -150,11 +238,11 @@ export function ConfigNotice({
   vars: string[];
 }) {
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-4 text-sm dark:border-amber-900/60 dark:bg-amber-950/30">
-      <p className="font-medium text-amber-900 dark:text-amber-200">
+    <div className="rounded-lg border border-warning-border bg-warning-bg px-5 py-4 text-sm">
+      <p className="font-heading font-semibold text-warning-text">
         {integration} isn&apos;t configured yet
       </p>
-      <p className="mt-1 text-amber-800 dark:text-amber-300/90">
+      <p className="mt-1.5 leading-relaxed text-warning-text">
         Set{" "}
         {vars.map((v, i) => (
           <span key={v}>
@@ -170,7 +258,7 @@ export function ConfigNotice({
 
 export function ErrorNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-red-300 bg-red-50 px-5 py-4 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+    <div className="rounded-lg border border-error-border bg-error-bg px-5 py-4 text-sm leading-relaxed text-error-text">
       {children}
     </div>
   );
@@ -182,7 +270,7 @@ export function ErrorNotice({ children }: { children: ReactNode }) {
 
 export function Code({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[0.8125rem] text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+    <code className="rounded bg-canvas-alt px-1.5 py-0.5 font-mono text-[0.8125rem] text-body">
       {children}
     </code>
   );
@@ -192,22 +280,32 @@ export function Mono({ children }: { children: ReactNode }) {
   return <span className="font-mono text-sm tabular-nums">{children}</span>;
 }
 
+/** The one dash used for "no value here", so empty cells look deliberate
+ * rather than like three different bugs. */
+export function Empty() {
+  return <span className="text-faint">—</span>;
+}
+
 /** Renders a UTC timestamp deterministically so SSR and the client agree. */
 export function Timestamp({ value }: { value: string | null }) {
-  if (!value) return <span className="text-zinc-400">—</span>;
+  if (!value) return <Empty />;
   const iso = new Date(value).toISOString();
   return (
-    <time dateTime={iso} className="tabular-nums">
+    <time dateTime={iso} className="font-mono text-[0.8125rem] tabular-nums">
       {iso.slice(0, 16).replace("T", " ")} UTC
     </time>
   );
 }
 
 export function Duration({ seconds }: { seconds: number | null }) {
-  if (seconds === null) return <span className="text-zinc-400">—</span>;
+  if (seconds === null) return <Empty />;
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
-  return <span className="tabular-nums">{`${m}:${String(s).padStart(2, "0")}`}</span>;
+  return (
+    <span className="font-mono text-[0.8125rem] tabular-nums">
+      {`${m}:${String(s).padStart(2, "0")}`}
+    </span>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -215,13 +313,14 @@ export function Duration({ seconds }: { seconds: number | null }) {
 /* -------------------------------------------------------------------------- */
 
 const BADGE_TONES = {
-  neutral:
-    "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  green: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
-  amber: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  red: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-  blue: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
-  violet: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
+  neutral: "border-line bg-canvas-alt text-muted",
+  green: "border-success-border bg-success-bg text-success-text",
+  amber: "border-warning-border bg-warning-bg text-warning-text",
+  red: "border-error-border bg-error-bg text-error-text",
+  blue: "border-info-border bg-info-bg text-info-text",
+  // The identity allows one tertiary accent per surface; violet is only ever
+  // used for the "live on another platform" number badge.
+  violet: "border-soft-purple/35 bg-soft-purple/12 text-soft-purple",
 } as const;
 
 export function Badge({
@@ -234,12 +333,32 @@ export function Badge({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        "inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
         BADGE_TONES[tone],
       )}
     >
       {children}
     </span>
+  );
+}
+
+/** Small status dot -- same tone vocabulary as `Badge`, for places where a
+ * whole pill is too much furniture (list rows, summary cards). */
+const DOT_TONES = {
+  neutral: "bg-n-400",
+  green: "bg-success-text",
+  amber: "bg-warning-text",
+  red: "bg-brand",
+  blue: "bg-info-text",
+  violet: "bg-soft-purple",
+} as const;
+
+export function StatusDot({ tone = "neutral" }: { tone?: keyof typeof DOT_TONES }) {
+  return (
+    <span
+      aria-hidden
+      className={cx("h-1.5 w-1.5 shrink-0 rounded-pill", DOT_TONES[tone])}
+    />
   );
 }
 
@@ -253,6 +372,10 @@ export function AgentStatusBadge({ status }: { status: AgentStatus }) {
   return <Badge tone={AGENT_STATUS_TONES[status]}>{status}</Badge>;
 }
 
+export function AgentStatusDot({ status }: { status: AgentStatus }) {
+  return <StatusDot tone={AGENT_STATUS_TONES[status]} />;
+}
+
 const OUTCOME_TONES: Record<CallOutcome, keyof typeof BADGE_TONES> = {
   qualified: "green",
   department_transfer: "blue",
@@ -262,7 +385,7 @@ const OUTCOME_TONES: Record<CallOutcome, keyof typeof BADGE_TONES> = {
 };
 
 export function OutcomeBadge({ outcome }: { outcome: CallOutcome | null }) {
-  if (!outcome) return <span className="text-zinc-400">—</span>;
+  if (!outcome) return <Empty />;
   return (
     <Badge tone={OUTCOME_TONES[outcome]}>{outcome.replace(/_/g, " ")}</Badge>
   );
@@ -273,39 +396,85 @@ export function OutcomeBadge({ outcome }: { outcome: CallOutcome | null }) {
 /* -------------------------------------------------------------------------- */
 
 const BUTTON_VARIANTS = {
-  primary:
-    "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300",
+  /** Brand red -- one per view, on the action that view exists to perform. */
+  primary: "bg-brand text-on-brand hover:bg-brand-deep",
   secondary:
-    "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
+    "border border-line bg-surface text-body hover:bg-canvas-alt hover:text-strong",
   danger:
-    "border border-red-300 bg-white text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/40",
+    "border border-error-border bg-error-bg text-error-text hover:bg-error-border",
+  /** No chrome until hovered -- for icon buttons and low-stakes toggles. */
+  ghost: "text-muted hover:bg-canvas-alt hover:text-strong",
 } as const;
 
+const BUTTON_SIZES = {
+  md: "h-9 gap-1.5 px-3.5 text-sm",
+  sm: "h-8 gap-1.5 px-3 text-[0.8125rem]",
+} as const;
+
+/* Focus is handled globally (see the `:focus-visible` rule in globals.css) so
+ * every interactive element in the app gets the same brand-red ring. */
 const BUTTON_BASE =
-  "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600";
+  "inline-flex shrink-0 items-center justify-center rounded-md font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
+export type ButtonSize = keyof typeof BUTTON_SIZES;
 
 export function Button({
   variant = "primary",
+  size = "md",
   className,
   ...props
-}: ComponentProps<"button"> & { variant?: keyof typeof BUTTON_VARIANTS }) {
+}: ComponentProps<"button"> & {
+  variant?: keyof typeof BUTTON_VARIANTS;
+  size?: ButtonSize;
+}) {
   return (
     <button
       {...props}
-      className={cx(BUTTON_BASE, BUTTON_VARIANTS[variant], className)}
+      className={cx(
+        BUTTON_BASE,
+        BUTTON_SIZES[size],
+        BUTTON_VARIANTS[variant],
+        className,
+      )}
     />
   );
 }
 
 export function ButtonLink({
   variant = "secondary",
+  size = "md",
   className,
   ...props
-}: ComponentProps<typeof Link> & { variant?: keyof typeof BUTTON_VARIANTS }) {
+}: ComponentProps<typeof Link> & {
+  variant?: keyof typeof BUTTON_VARIANTS;
+  size?: ButtonSize;
+}) {
   return (
     <Link
       {...props}
-      className={cx(BUTTON_BASE, BUTTON_VARIANTS[variant], className)}
+      className={cx(
+        BUTTON_BASE,
+        BUTTON_SIZES[size],
+        BUTTON_VARIANTS[variant],
+        className,
+      )}
+    />
+  );
+}
+
+/** Inline text link, in brand red. `brand-deep` in light mode for contrast
+ * against a white surface; the lighter red reads better on a dark one. */
+export function TextLink({
+  className,
+  ...props
+}: ComponentProps<typeof Link>) {
+  return (
+    <Link
+      {...props}
+      className={cx(
+        "font-medium text-brand-deep underline-offset-2 transition-colors hover:underline dark:text-brand",
+        className,
+      )}
     />
   );
 }
@@ -314,14 +483,29 @@ export function ButtonLink({
 /* Form fields                                                                */
 /* -------------------------------------------------------------------------- */
 
-const CONTROL =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+/* Split so a toned control can replace the colour half without both versions
+ * emitting a `background-color` utility. Two Tailwind utilities for the same
+ * property have identical specificity, so which one wins comes down to their
+ * order in the generated stylesheet, not the order they're listed at the call
+ * site -- appending `bg-success-bg` to a class list that already has
+ * `bg-surface` is a coin toss. */
+const CONTROL_BASE =
+  "w-full rounded-md border px-3 py-2 text-sm transition-colors placeholder:text-faint disabled:cursor-not-allowed disabled:opacity-60";
+
+/* `bg-input` rather than `bg-surface`: a card is already the elevated surface,
+ * so a field sharing that token has no edge to it at all in dark mode. This one
+ * is recessed instead -- see the note on --input-bg in globals.css. */
+const CONTROL_SURFACE =
+  "border-input-line bg-input text-body focus:border-brand";
+
+const CONTROL = `${CONTROL_BASE} ${CONTROL_SURFACE}`;
+
+/* Tones for a control whose value is itself a status live with the dropdown
+ * that uses them -- see TRIGGER_TONES in components/dropdown.tsx. */
 
 const FIELD_BADGE_CLASSES: Record<"required" | "optional", string> = {
-  required:
-    "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  optional:
-    "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  required: "bg-brand-tint text-brand-deep dark:text-brand",
+  optional: "bg-canvas-alt text-faint",
 };
 
 /**
@@ -335,17 +519,19 @@ export function InfoTooltip({ text }: { text: ReactNode }) {
     <span className="group/tooltip relative inline-flex">
       <button
         type="button"
-        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-zinc-400 text-[0.625rem] leading-none font-medium text-zinc-500 hover:border-zinc-600 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-600 dark:text-zinc-400 dark:hover:border-zinc-300 dark:hover:text-zinc-200"
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-pill border border-n-400 font-mono text-[0.625rem] leading-none font-medium text-faint transition-colors hover:border-brand hover:text-brand"
         aria-label="More info"
       >
         i
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[min(20rem,80vw)] -translate-x-1/2 rounded-md bg-zinc-900 px-3 py-2 text-xs leading-relaxed font-normal whitespace-normal text-zinc-50 opacity-0 shadow-lg transition-opacity duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100 dark:bg-zinc-100 dark:text-zinc-900"
+        // bg-strong/text-canvas is the inverted surface pair: near-black on
+        // white in light mode, white on near-black in dark, from one class each.
+        className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-2 w-max max-w-[min(20rem,80vw)] -translate-x-1/2 rounded-md bg-strong px-3 py-2 text-xs leading-relaxed font-normal whitespace-normal text-canvas opacity-0 shadow-lg transition-opacity duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100"
       >
         {text}
-        <span className="absolute top-full left-1/2 h-0 w-0 -translate-x-1/2 border-4 border-transparent border-t-zinc-900 dark:border-t-zinc-100" />
+        <span className="absolute top-full left-1/2 h-0 w-0 -translate-x-1/2 border-4 border-transparent border-t-strong" />
       </span>
     </span>
   );
@@ -369,28 +555,60 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <label
         htmlFor={htmlFor}
-        className="flex items-center gap-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-200"
+        className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-body"
       >
         {label}
         {hint && <InfoTooltip text={hint} />}
         {badge && (
           <span
             className={cx(
-              "rounded-full px-1.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap",
+              "rounded-pill px-1.5 py-0.5 text-[0.6875rem] font-semibold whitespace-nowrap",
               badge === "required" || badge === "optional"
                 ? FIELD_BADGE_CLASSES[badge]
-                : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+                : "bg-warning-bg text-warning-text",
             )}
           >
-            {badge === "required" ? "Required" : badge === "optional" ? "Optional" : badge}
+            {badge === "required"
+              ? "Required"
+              : badge === "optional"
+                ? "Optional"
+                : badge}
           </span>
         )}
       </label>
       {children}
     </div>
+  );
+}
+
+/** A titled group of related fields inside a form, replacing the ad-hoc
+ * `<fieldset class="border-t ...">` blocks that had drifted apart. */
+export function FieldSet({
+  legend,
+  description,
+  children,
+}: {
+  legend: string;
+  description?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <fieldset className="space-y-4 border-t border-divider pt-5">
+      <div>
+        <legend className="font-heading text-sm font-semibold text-strong">
+          {legend}
+        </legend>
+        {description && (
+          <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-muted">
+            {description}
+          </p>
+        )}
+      </div>
+      {children}
+    </fieldset>
   );
 }
 
@@ -402,13 +620,53 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   return (
     <textarea
       {...props}
-      className={cx(CONTROL, "font-mono leading-relaxed", className)}
+      className={cx(CONTROL, "font-mono text-[0.8125rem] leading-relaxed", className)}
     />
   );
 }
 
-export function Select({ className, ...props }: ComponentProps<"select">) {
-  return <select {...props} className={cx(CONTROL, className)} />;
+/* There's no `Select` primitive here on purpose. A native <select>'s open list
+ * is drawn by the OS -- unstylable, single-line, and on Windows it lands as a
+ * white menu with a blue highlight in the middle of a dark dashboard. Use
+ * components/dropdown.tsx instead; it posts through a hidden input, so it drops
+ * into a form the same way. */
+
+/** The one-character glyph that stands in for a tool's type (see
+ * lib/tool-display.ts for which character means what). Brand red on a plain
+ * surface -- these appear in lists of a dozen, so a filled colour block each
+ * would fight everything around them. */
+export function ToolTypeGlyph({ icon }: { icon: string }) {
+  return (
+    <span
+      aria-hidden
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface font-mono text-xs font-bold text-brand"
+    >
+      {icon}
+    </span>
+  );
+}
+
+/** A value that can't be edited -- fixed by the worker and shown here only for
+ * context. Deliberately does NOT look like an input: dashed edge, no recessed
+ * fill, muted text. Editable fields are the solid, filled ones. */
+export function StaticValue({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-md border border-dashed border-line px-3 py-2 text-sm text-muted">
+      {children}
+    </p>
+  );
+}
+
+export function Checkbox({ className, ...props }: ComponentProps<"input">) {
+  return (
+    <input
+      {...props}
+      type="checkbox"
+      // accent-color comes from the global `:root` rule, so a checked box is
+      // brand red without every call site restating it.
+      className={cx("size-4 rounded-sm border-line", className)}
+    />
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -417,7 +675,7 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
 
 export function Table({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="-mx-2 overflow-x-auto px-2">
       <table className="w-full text-left text-sm">{children}</table>
     </div>
   );
@@ -428,7 +686,7 @@ export function Th({ children, className }: ComponentProps<"th">) {
     <th
       scope="col"
       className={cx(
-        "border-b border-zinc-200 px-3 py-2 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:border-zinc-800 dark:text-zinc-400",
+        "border-b border-line px-3 py-2.5 font-mono text-[0.6875rem] font-medium tracking-[0.08em] whitespace-nowrap text-faint uppercase",
         className,
       )}
     >
@@ -440,10 +698,7 @@ export function Th({ children, className }: ComponentProps<"th">) {
 export function Td({ children, className }: ComponentProps<"td">) {
   return (
     <td
-      className={cx(
-        "border-b border-zinc-100 px-3 py-2.5 align-middle dark:border-zinc-900",
-        className,
-      )}
+      className={cx("border-b border-divider px-3 py-3 align-middle", className)}
     >
       {children}
     </td>

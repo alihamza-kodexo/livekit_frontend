@@ -4,7 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { AgentStatusBadge, Input } from "@/components/ui";
+import {
+  SectionSidebar,
+  SectionSidebarBody,
+  SectionSidebarHeader,
+} from "@/components/section-sidebar";
+import { AgentStatusDot, ButtonLink, Input } from "@/components/ui";
 import type { AgentListItem } from "@/lib/queries";
 
 /**
@@ -23,71 +28,72 @@ export function AgentsSidebar({ agents }: { agents: AgentListItem[] }) {
   }, [agents, search]);
 
   return (
-    <aside className="w-full shrink-0 space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 lg:sticky lg:top-[calc(var(--nav-h,4rem)+1rem)] lg:w-52 lg:self-start">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Agents <span className="font-normal text-zinc-400">{agents.length}</span>
-        </h2>
-        <Link
-          href="/agents"
-          className="rounded-md border border-blue-600/30 bg-blue-600/10 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-600/20 dark:border-blue-400/30 dark:bg-blue-400/10 dark:text-blue-400 dark:hover:bg-blue-400/20"
-        >
-          + New
-        </Link>
-      </div>
-
-      <Input
-        type="search"
-        placeholder="Search agents…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        aria-label="Search agents"
+    <SectionSidebar>
+      <SectionSidebarHeader
+        title="Agents"
+        count={agents.length}
+        action={
+          <ButtonLink href="/agents/new" variant="primary" size="sm">
+            + New
+          </ButtonLink>
+        }
       />
+      <SectionSidebarBody>
+        <Input
+          type="search"
+          placeholder="Search agents…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search agents"
+        />
 
-      <nav className="max-h-[calc(100vh-13rem)] space-y-1 overflow-y-auto pr-1">
-        {filtered.length === 0 ? (
-          <p className="px-2 py-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
-            No agents match &ldquo;{search}&rdquo;.
-          </p>
-        ) : (
-          filtered.map((agent) => {
-            const active = agent.agent_id === currentAgentId;
-            return (
-              <Link
-                key={agent.agent_id}
-                href={`/agents/${agent.agent_id}`}
-                className={
-                  active
-                    ? "block rounded-md bg-zinc-900 px-2.5 py-1.5 dark:bg-zinc-100"
-                    : "block rounded-md px-2.5 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                }
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={
-                      active
-                        ? "truncate text-sm font-medium text-white dark:text-zinc-900"
-                        : "truncate text-sm font-medium text-zinc-800 dark:text-zinc-200"
-                    }
-                  >
-                    {agent.name}
-                  </span>
-                  <AgentStatusBadge status={agent.status} />
-                </div>
-                <div
+        <nav className="space-y-1">
+          {filtered.length === 0 ? (
+            <p className="px-2 py-6 text-center text-xs text-faint">
+              No agents match &ldquo;{search}&rdquo;.
+            </p>
+          ) : (
+            filtered.map((agent) => {
+              const active = agent.agent_id === currentAgentId;
+              return (
+                <Link
+                  key={agent.agent_id}
+                  href={`/agents/${agent.agent_id}`}
+                  aria-current={active ? "page" : undefined}
                   className={
                     active
-                      ? "mt-0.5 truncate text-xs text-zinc-300 dark:text-zinc-600"
-                      : "mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400"
+                      ? "block rounded-md border border-brand/40 bg-brand-tint px-3 py-2"
+                      : "block rounded-md border border-transparent px-3 py-2 transition-colors hover:bg-surface"
                   }
                 >
-                  {agent.stt_provider} · {agent.llm_provider} · {agent.tts_provider}
-                </div>
-              </Link>
-            );
-          })
-        )}
-      </nav>
-    </aside>
+                  <div className="flex items-center gap-2">
+                    <AgentStatusDot status={agent.status} />
+                    <span
+                      className={
+                        active
+                          ? "truncate text-sm font-semibold text-brand-deep dark:text-brand"
+                          : "truncate text-sm font-medium text-body"
+                      }
+                    >
+                      {agent.name}
+                    </span>
+                  </div>
+                  {/* Derived from llm_provider, NOT from the agent's own
+                      stt_provider/tts_provider columns. Those are leftovers the
+                      worker never reads -- rows created before the move to
+                      Deepgram still say "cartesia", so printing them here
+                      reported a vendor that isn't in the call path. */}
+                  <div className="mt-0.5 truncate pl-3.5 font-mono text-[0.6875rem] text-faint">
+                    {agent.llm_provider === "gemini_live"
+                      ? "gemini live · built-in voice"
+                      : `${agent.llm_provider} · deepgram`}
+                  </div>
+                </Link>
+              );
+            })
+          )}
+        </nav>
+      </SectionSidebarBody>
+    </SectionSidebar>
   );
 }

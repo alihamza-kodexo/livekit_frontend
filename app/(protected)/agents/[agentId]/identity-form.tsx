@@ -1,12 +1,21 @@
 "use client";
 
-import { useActionState, useId } from "react";
+import { useActionState, useId, useState } from "react";
 
 import { updateAgentIdentity } from "@/app/(protected)/agents/actions";
 import { ActionMessage, SubmitButton, useFlashStatus } from "@/components/form";
-import { Input, Select } from "@/components/ui";
+import { Dropdown } from "@/components/dropdown";
+import { Input } from "@/components/ui";
 import { IDLE } from "@/lib/forms";
 import { AGENT_STATUSES, type Agent, type AgentStatus } from "@/lib/types";
+
+/** The status control carries its own state as colour -- live agents read green
+ * at a glance, paused ones amber, drafts stay quiet. */
+const AGENT_STATUS_TONES: Record<AgentStatus, "green" | "amber" | "neutral"> = {
+  active: "green",
+  paused: "amber",
+  draft: "neutral",
+};
 
 const AGENT_STATUS_TOOLTIPS: Record<AgentStatus, string> = {
   draft: "Not live. Safe to leave incomplete -- won't answer calls even if a number is assigned.",
@@ -25,6 +34,7 @@ export function AgentIdentityForm({ agent }: { agent: Agent }) {
   const [state, formAction, pending] = useActionState(updateAgentIdentity, IDLE);
   const flash = useFlashStatus(state);
   const formId = useId();
+  const [status, setStatus] = useState<AgentStatus>(agent.status);
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -36,15 +46,23 @@ export function AgentIdentityForm({ agent }: { agent: Agent }) {
           required
           aria-label="Persona name"
           placeholder="Persona name"
-          className="w-28 sm:w-32"
+          className="w-32 sm:w-40"
         />
-        <Select name="status" defaultValue={agent.status} aria-label="Status" className="w-24">
-          {AGENT_STATUSES.map((status) => (
-            <option key={status} value={status} title={AGENT_STATUS_TOOLTIPS[status]}>
-              {status}
-            </option>
-          ))}
-        </Select>
+        <Dropdown
+          name="status"
+          value={status}
+          onValueChange={(next) => setStatus(next as AgentStatus)}
+          ariaLabel="Status"
+          tone={AGENT_STATUS_TONES[status]}
+          className="w-36"
+          menuClassName="w-72"
+          align="end"
+          options={AGENT_STATUSES.map((option) => ({
+            value: option,
+            label: option,
+            description: AGENT_STATUS_TOOLTIPS[option],
+          }))}
+        />
         <SubmitButton
           formId={formId}
           variant="secondary"

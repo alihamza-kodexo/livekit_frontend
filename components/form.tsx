@@ -4,7 +4,7 @@ import { useActionState, useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { Button } from "@/components/ui";
+import { Button, type ButtonSize } from "@/components/ui";
 import { IDLE, type ActionState } from "@/lib/forms";
 
 type ServerAction = (
@@ -12,7 +12,7 @@ type ServerAction = (
   form: FormData,
 ) => Promise<ActionState>;
 
-type ButtonVariant = "primary" | "secondary" | "danger";
+type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
 /**
  * Shared gating logic behind the `confirm` prop on ActionForm/ActionButton.
@@ -108,6 +108,8 @@ function Spinner() {
 export function SubmitButton({
   formId,
   variant,
+  size = "md",
+  fullWidth,
   idleLabel,
   pendingLabel,
   successLabel = "Saved",
@@ -116,15 +118,24 @@ export function SubmitButton({
 }: {
   formId: string;
   variant: ButtonVariant;
+  size?: ButtonSize;
+  fullWidth?: boolean;
   idleLabel: string;
   pendingLabel?: string;
   successLabel?: string;
   pending: boolean;
   flash: FlashStatus;
 }) {
+  const shared = {
+    type: "submit" as const,
+    form: formId,
+    size,
+    className: fullWidth ? "w-full" : undefined,
+  };
+
   if (pending) {
     return (
-      <Button type="submit" form={formId} variant={variant} disabled>
+      <Button {...shared} variant={variant} disabled>
         <Spinner />
         {pendingLabel ?? "Working…"}
       </Button>
@@ -132,24 +143,51 @@ export function SubmitButton({
   }
   if (flash === "success") {
     return (
-      <Button type="submit" form={formId} variant={variant}>
-        <span aria-hidden>✓</span>
+      <Button {...shared} variant={variant}>
+        <CheckIcon />
         {successLabel}
       </Button>
     );
   }
   if (flash === "error") {
     return (
-      <Button type="submit" form={formId} variant="danger">
-        <span aria-hidden>✕</span>
+      <Button {...shared} variant="danger">
+        <CrossIcon />
         Failed
       </Button>
     );
   }
   return (
-    <Button type="submit" form={formId} variant={variant}>
+    <Button {...shared} variant={variant}>
       {idleLabel}
     </Button>
+  );
+}
+
+const FLASH_ICON_PROPS = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2.5,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  className: "h-3.5 w-3.5 shrink-0",
+  "aria-hidden": true,
+};
+
+function CheckIcon() {
+  return (
+    <svg {...FLASH_ICON_PROPS}>
+      <path d="m5 13 4 4L19 7" />
+    </svg>
+  );
+}
+
+function CrossIcon() {
+  return (
+    <svg {...FLASH_ICON_PROPS}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
   );
 }
 
@@ -165,6 +203,7 @@ export function ActionForm({
   action,
   submitLabel = "Save",
   submitVariant = "primary",
+  submitFullWidth,
   pendingLabel,
   confirm,
   footer,
@@ -174,6 +213,9 @@ export function ActionForm({
   action: ServerAction;
   submitLabel?: string;
   submitVariant?: ButtonVariant;
+  /** Stretches the submit button across the form -- for a single-purpose form
+   * that is the whole surface, like sign-in. */
+  submitFullWidth?: boolean;
   pendingLabel?: string;
   confirm?: string;
   /** Extra content rendered next to the submit button. */
@@ -197,10 +239,17 @@ export function ActionForm({
       <form id={formId} ref={formRef} action={formAction} className="space-y-4" onSubmit={onSubmit}>
         {children}
       </form>
-      <div className="flex flex-wrap items-center gap-3">
+      <div
+        className={
+          submitFullWidth
+            ? "space-y-3"
+            : "flex flex-wrap items-center gap-3"
+        }
+      >
         <SubmitButton
           formId={formId}
           variant={submitVariant}
+          fullWidth={submitFullWidth}
           idleLabel={submitLabel}
           pendingLabel={pendingLabel}
           pending={pending}
@@ -223,8 +272,8 @@ export function ActionMessage({ state }: { state: ActionState }) {
       role="status"
       className={
         state.status === "error"
-          ? "text-sm text-red-600 dark:text-red-400"
-          : "text-sm text-green-700 dark:text-green-400"
+          ? "text-sm text-error-text"
+          : "text-sm text-success-text"
       }
     >
       {state.message}
@@ -241,6 +290,7 @@ export function ActionButton({
   label,
   pendingLabel,
   variant = "secondary",
+  size = "md",
   confirm,
   hidden,
 }: {
@@ -248,6 +298,9 @@ export function ActionButton({
   label: string;
   pendingLabel?: string;
   variant?: ButtonVariant;
+  /** `"sm"` for buttons that live inside a table row or list item, so they
+   * don't out-weigh the row's own content. */
+  size?: ButtonSize;
   confirm?: string;
   /** Hidden field name/value pairs identifying the target row. */
   hidden: Record<string, string>;
@@ -274,6 +327,7 @@ export function ActionButton({
         <SubmitButton
           formId={formId}
           variant={variant}
+          size={size}
           idleLabel={label}
           pendingLabel={pendingLabel}
           successLabel="Done"

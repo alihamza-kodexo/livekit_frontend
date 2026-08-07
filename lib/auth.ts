@@ -1,7 +1,9 @@
 import "server-only";
 
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
+import { authEnv } from "@/lib/env";
 import { db } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,6 +35,31 @@ export async function isEmailAllowed(email: string): Promise<boolean> {
     .maybeSingle();
   if (error) throw new Error(`isEmailAllowed: ${error.message}`);
   return data !== null;
+}
+
+/**
+ * Re-checks the signed-in admin's own password, for actions that shouldn't ride
+ * on nothing but a session cookie -- currently rewriting provider credentials
+ * from the Integrations page.
+ *
+ * Uses a standalone client rather than the cookie-bound one from
+ * lib/supabase/server: this must not touch the caller's session. That's also
+ * why it doesn't sign the throwaway client out afterwards -- supabase-js
+ * `signOut()` defaults to global scope, which would revoke every session for
+ * this user, including the one making the request. With `persistSession: false`
+ * nothing is stored locally and the short-lived token simply expires.
+ */
+export async function verifyPassword(
+  email: string,
+  password: string,
+): Promise<boolean> {
+  if (!password) return false;
+  const { url, anonKey } = authEnv();
+  const client = createSupabaseClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  return !error;
 }
 
 /**

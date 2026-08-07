@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 
-import { Button, Input } from "@/components/ui";
+import { Button, Checkbox, Input } from "@/components/ui";
 
 export type RowColumn =
   /** Carried through so the action can tell an edit from an insert. */
@@ -71,13 +71,13 @@ export function RepeatableRows({
   return (
     <div className="space-y-3">
       {rows.length === 0 && emptyHint && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">{emptyHint}</p>
+        <p className="text-sm text-muted">{emptyHint}</p>
       )}
 
       {rows.map((row, index) => (
         <div
           key={keys[index]}
-          className="flex flex-wrap items-end gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+          className="flex flex-wrap items-end gap-3 rounded-md border border-line bg-canvas-alt p-3"
         >
           {columns.map((column) => {
             if (column.kind === "hidden") {
@@ -96,21 +96,16 @@ export function RepeatableRows({
             if (column.kind === "bool") {
               const checked = row[column.name] === "true";
               return (
-                <div key={column.name} className="flex items-center gap-2 pb-1.5">
+                <div key={column.name} className="flex items-center gap-2 pb-2">
                   <input type="hidden" name={column.name} value={String(checked)} />
-                  <input
+                  <Checkbox
                     id={inputId}
-                    type="checkbox"
                     checked={checked}
                     onChange={(e) =>
                       update(index, column.name, String(e.target.checked))
                     }
-                    className="size-4 rounded border-zinc-300 dark:border-zinc-600"
                   />
-                  <label
-                    htmlFor={inputId}
-                    className="text-sm text-zinc-700 dark:text-zinc-300"
-                  >
+                  <label htmlFor={inputId} className="text-sm text-body">
                     {column.label}
                   </label>
                 </div>
@@ -128,7 +123,7 @@ export function RepeatableRows({
                   htmlFor={inputId}
                   className={
                     index === 0
-                      ? "mb-1.5 block text-sm font-medium text-zinc-800 dark:text-zinc-200"
+                      ? "mb-2 block text-sm font-medium text-body"
                       : "sr-only"
                   }
                 >
@@ -147,7 +142,8 @@ export function RepeatableRows({
 
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
+            size="sm"
             onClick={() => removeRow(index)}
             aria-label={`Remove row ${index + 1}`}
           >
@@ -161,8 +157,8 @@ export function RepeatableRows({
         Columns: {labelled.map((c) => c.label).join(", ")}
       </span>
 
-      <Button type="button" variant="secondary" onClick={addRow}>
-        {addLabel}
+      <Button type="button" variant="secondary" size="sm" onClick={addRow}>
+        + {addLabel}
       </Button>
     </div>
   );

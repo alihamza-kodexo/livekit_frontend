@@ -137,7 +137,12 @@ export type Agent = {
   stt_provider: string;
   tts_provider: string;
   llm_provider: LLMProvider;
+  /** Deepgram Aura model name. Only reaches a call when llm_provider is groq
+   * or deepseek -- Gemini Live has no separate TTS step (see 0018). */
   voice_id: string | null;
+  /** Gemini Live prebuilt voice name. Only used when llm_provider is
+   * gemini_live; null means the plugin's own default. */
+  gemini_voice: string | null;
   pronunciation_dictionary: PronunciationEntry[];
   conversation_settings: ConversationSettings;
   /** Null means "use the worker's default end-of-call guidance" -- see BuiltinTools' end_call entry. */

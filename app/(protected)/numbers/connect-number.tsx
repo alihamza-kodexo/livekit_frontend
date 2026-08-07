@@ -3,8 +3,9 @@
 import { useActionState } from "react";
 
 import { connectNumber } from "@/app/(protected)/numbers/actions";
+import { Dropdown } from "@/components/dropdown";
 import { ActionMessage } from "@/components/form";
-import { Button, Field, Input, Select } from "@/components/ui";
+import { Button, Field, Input } from "@/components/ui";
 import { IDLE } from "@/lib/forms";
 
 export type AgentOption = { agent_id: string; name: string };
@@ -66,14 +67,18 @@ export function ConnectNumber({ agents }: { agents: AgentOption[] }) {
         <Input id="connect-friendly-name" name="friendly_name" placeholder="Acme support line" />
       </Field>
       <Field label="Assign to" htmlFor="connect-agent-id" badge="optional">
-        <Select id="connect-agent-id" name="agent_id" defaultValue="">
-          <option value="">Leave unassigned</option>
-          {agents.map((agent) => (
-            <option key={agent.agent_id} value={agent.agent_id}>
-              {agent.name}
-            </option>
-          ))}
-        </Select>
+        <Dropdown
+          id="connect-agent-id"
+          name="agent_id"
+          defaultValue=""
+          options={[
+            { value: "", label: "Leave unassigned" },
+            ...agents.map((agent) => ({
+              value: agent.agent_id,
+              label: agent.name,
+            })),
+          ]}
+        />
       </Field>
       <Button type="submit" disabled={pending}>
         {pending ? "Connecting…" : "Connect number"}

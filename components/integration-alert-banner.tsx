@@ -23,20 +23,20 @@ export async function IntegrationAlertBanner() {
   if (broken.length === 0) return null;
 
   return (
-    <div className="border-b border-red-300 bg-red-50 px-6 py-3 dark:border-red-900/60 dark:bg-red-950/40">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
-        <span className="text-sm font-medium text-red-900 dark:text-red-200">
+    <div className="shrink-0 border-b border-error-border bg-error-bg px-6 py-3 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3">
+        <span className="text-sm font-semibold text-error-text">
           {broken.length} integration{broken.length === 1 ? "" : "s"} configured but not working:
         </span>
         {broken.map((check) => (
           <span key={check.name} className="inline-flex items-center gap-1.5 text-sm">
-            <span className="text-red-900 dark:text-red-200">{check.name}</span>
+            <span className="text-error-text">{check.name}</span>
             <HealthBadge status={check.status} />
           </span>
         ))}
         <Link
           href="/integrations"
-          className="ml-auto text-sm font-medium text-red-900 underline hover:no-underline dark:text-red-200"
+          className="ml-auto text-sm font-semibold text-error-text underline underline-offset-2 hover:no-underline"
         >
           View details
         </Link>

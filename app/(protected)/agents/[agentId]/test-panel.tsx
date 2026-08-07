@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "@livekit/components-styles";
 import {
   LiveKitRoom,
@@ -69,7 +70,16 @@ export function TestAgentPanel({
         {starting ? "Connecting…" : "Test agent"}
       </Button>
 
-      {widgetOpen && (
+      {/*
+        Rendered into <body> rather than in place. This button lives in the
+        agent page's sticky header, which is a `position: sticky` element with a
+        z-index -- that makes it a stacking context, so a `fixed` panel nested
+        inside it is trapped in that context no matter how high its own z-index
+        goes. The symptom was the tab bar (an ordinary z-10 sibling of the
+        header, later in the DOM) painting straight over the panel. A portal
+        moves the panel out to the top level where `z-40` means what it says.
+      */}
+      {widgetOpen && createPortal(
         <PanelShell minimized={minimized}>
           {session ? (
             <LiveKitRoom
@@ -109,7 +119,8 @@ export function TestAgentPanel({
               onClose={closeWidget}
             />
           )}
-        </PanelShell>
+        </PanelShell>,
+        document.body,
       )}
     </>
   );
@@ -130,8 +141,8 @@ function PanelShell({
     <div
       className={
         minimized
-          ? "fixed bottom-4 right-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col"
-          : "fixed inset-y-0 right-0 z-40 flex w-full max-w-sm flex-col border-l border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"
+          ? "fixed right-4 bottom-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col"
+          : "fixed inset-y-0 right-0 z-40 flex w-full max-w-sm flex-col border-l border-line bg-surface shadow-lg"
       }
     >
       {children}
@@ -141,15 +152,15 @@ function PanelShell({
 
 function PanelHeader({ onClose }: { onClose: () => void }) {
   return (
-    <header className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-      <span className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-        <ChatIcon /> Transcript and Chat
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-divider px-4">
+      <span className="flex items-center gap-2 font-heading text-sm font-semibold text-strong">
+        <ChatIcon /> Transcript
       </span>
       <button
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+        className="rounded-md p-1 text-faint transition-colors hover:bg-canvas-alt hover:text-strong"
       >
         <XIcon />
       </button>
@@ -179,9 +190,11 @@ function PendingPanelBody({
           <PanelHeader onClose={onClose} />
           <div className="flex-1 overflow-y-auto p-4">
             {error ? (
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <p className="rounded-md border border-error-border bg-error-bg px-3 py-2 text-sm text-error-text">
+                {error}
+              </p>
             ) : (
-              <p className="mt-16 text-center text-sm text-zinc-400 dark:text-zinc-500">
+              <p className="mt-16 text-center text-sm text-faint">
                 Waiting for conversation…
               </p>
             )}
@@ -268,9 +281,9 @@ function ConnectedPanelBody({
       {!minimized && (
         <>
           <PanelHeader onClose={onClose} />
-          <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-4">
+          <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4">
             {messages.length === 0 ? (
-              <p className="mt-16 text-center text-sm text-zinc-400 dark:text-zinc-500">
+              <p className="mt-16 text-center text-sm text-faint">
                 Waiting for conversation…
               </p>
             ) : (
@@ -282,8 +295,8 @@ function ConnectedPanelBody({
                   <div
                     className={
                       message.fromAgent
-                        ? "max-w-[80%] rounded-lg bg-zinc-100 px-3 py-1.5 text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100"
-                        : "max-w-[80%] rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white"
+                        ? "max-w-[85%] rounded-lg rounded-bl-sm border border-line bg-canvas-alt px-3 py-2 text-sm leading-relaxed text-body"
+                        : "max-w-[85%] rounded-lg rounded-br-sm bg-brand px-3 py-2 text-sm leading-relaxed text-on-brand"
                     }
                   >
                     {message.text}
@@ -333,29 +346,30 @@ function StatusBar({
     <div
       className={
         minimized
-          ? "shrink-0 rounded-lg border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
-          : "mx-3 mb-3 shrink-0 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
+          ? "shrink-0 rounded-lg border border-line bg-surface p-3 shadow-lg"
+          : "mx-3 mb-3 shrink-0 rounded-lg border border-line bg-canvas-alt p-3"
       }
     >
       <div className="flex items-center justify-between">
-        <span className="text-[0.6875rem] font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+        <span className="mono-kicker flex items-center gap-1.5">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-pill bg-brand brand-pulse" />
           {statusLabel}
         </span>
         <button
           type="button"
           onClick={onToggleMinimize}
           aria-label={minimized ? "Expand" : "Minimize"}
-          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+          className="rounded-md p-1 text-faint transition-colors hover:bg-surface hover:text-strong"
         >
           <MinusIcon />
         </button>
       </div>
-      <div className="mt-1.5 flex items-center justify-between gap-3">
+      <div className="mt-2 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <p className="truncate font-heading text-sm font-semibold text-strong">
             {agentName}
           </p>
-          <p className="font-mono text-xs text-zinc-400 dark:text-zinc-500">{elapsedLabel}</p>
+          <p className="font-mono text-xs text-faint tabular-nums">{elapsedLabel}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <IconButton active={minimized} onClick={onToggleMinimize} label="Toggle transcript">
@@ -371,7 +385,7 @@ function StatusBar({
               type="button"
               onClick={onHangUp}
               aria-label="End test call"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white transition-colors hover:bg-red-700"
+              className="flex h-8 w-8 items-center justify-center rounded-pill bg-brand text-on-brand transition-colors hover:bg-brand-deep"
             >
               <HangUpIcon />
             </button>
@@ -400,8 +414,8 @@ function IconButton({
       aria-label={label}
       className={
         active
-          ? "flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+          ? "flex h-8 w-8 items-center justify-center rounded-pill bg-strong text-canvas transition-colors"
+          : "flex h-8 w-8 items-center justify-center rounded-pill border border-line bg-surface text-muted transition-colors hover:text-strong"
       }
     >
       {children}

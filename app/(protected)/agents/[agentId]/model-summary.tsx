@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { findDeepgramVoice } from "@/lib/deepgram-voices";
+import { GEMINI_DEFAULT_VOICE, findGeminiVoice } from "@/lib/gemini-voices";
 import type { Agent, LLMProvider } from "@/lib/types";
 
 /**
@@ -33,38 +34,38 @@ function PencilIcon() {
   );
 }
 
+/**
+ * Deliberately no per-card accent colour: the identity allows one tertiary
+ * accent per surface and never a set of them side by side, so these read as
+ * three instances of the same card rather than a traffic light.
+ */
 function SummaryCard({
-  dotColor,
   label,
   title,
   subtitle,
   editHref,
 }: {
-  dotColor: string;
   label: string;
   title: string;
   subtitle: string;
   editHref: string;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-          <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-          {label}
-        </span>
+    <div className="group rounded-lg border border-line bg-surface px-4 py-3.5 shadow-sm transition-colors hover:border-brand/40">
+      <div className="flex items-start justify-between gap-2">
+        <span className="mono-kicker">{label}</span>
         <Link
           href={editHref}
           aria-label={`Edit ${label.toLowerCase()}`}
-          className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          className="rounded-md p-1 text-faint opacity-0 transition-opacity group-hover:opacity-100 hover:bg-canvas-alt hover:text-brand focus-visible:opacity-100"
         >
           <PencilIcon />
         </Link>
       </div>
-      <p className="mt-2 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+      <p className="mt-1.5 truncate font-heading text-sm font-semibold text-strong">
         {title}
       </p>
-      <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>
+      <p className="truncate text-xs text-muted">{subtitle}</p>
     </div>
   );
 }
@@ -81,27 +82,47 @@ export function AgentModelSummary({ agent }: { agent: Agent }) {
   const voice = agent.voice_id ? findDeepgramVoice(agent.voice_id) : undefined;
   const editHref = `/agents/${agent.agent_id}?tab=voice`;
 
+  // Gemini Live is speech-to-speech: the worker builds no separate STT or TTS
+  // stage for it at all, so naming Deepgram on either end would be wrong.
+  const realtime = agent.llm_provider === "gemini_live";
+  const geminiCharacter = findGeminiVoice(
+    agent.gemini_voice ?? GEMINI_DEFAULT_VOICE,
+  )?.character;
+
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <SummaryCard
-        dotColor="bg-orange-500"
         label="Transcriber"
-        title="Deepgram"
-        subtitle="Speech-to-text -- fixed for every agent"
+        title={realtime ? "Built in" : "Deepgram"}
+        subtitle={
+          realtime
+            ? "Gemini Live transcribes as it listens"
+            : "Speech-to-text -- fixed for every agent"
+        }
         editHref={editHref}
       />
       <SummaryCard
-        dotColor="bg-blue-500"
         label="Model"
         title={llm.name}
         subtitle={llm.note}
         editHref={editHref}
       />
       <SummaryCard
-        dotColor="bg-fuchsia-500"
         label="Voice"
-        title={voice ? voice.name : "Worker default"}
-        subtitle={voice ? `Deepgram (Aura) -- ${voice.language}` : "Deepgram (Aura)"}
+        title={
+          realtime
+            ? (agent.gemini_voice ?? GEMINI_DEFAULT_VOICE)
+            : voice
+              ? voice.name
+              : "Worker default"
+        }
+        subtitle={
+          realtime
+            ? `Gemini Live prebuilt${geminiCharacter ? ` -- ${geminiCharacter}` : ""}`
+            : voice
+              ? `Deepgram (Aura) -- ${voice.language}`
+              : "Deepgram (Aura)"
+        }
         editHref={editHref}
       />
     </div>

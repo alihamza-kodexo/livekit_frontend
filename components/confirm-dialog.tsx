@@ -23,7 +23,7 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Confirm action"
@@ -33,11 +33,11 @@ export function ConfirmDialog({
       }}
     >
       <div
-        className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+        className="w-full max-w-md rounded-lg border border-line bg-surface p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="text-sm text-zinc-800 dark:text-zinc-200">{message}</p>
-        <div className="mt-4 flex justify-end gap-2">
+        <p className="text-sm leading-relaxed text-body">{message}</p>
+        <div className="mt-5 flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onCancel}>
             Cancel
           </Button>

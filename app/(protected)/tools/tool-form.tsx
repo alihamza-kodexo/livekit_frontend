@@ -3,9 +3,10 @@
 import { useState } from "react";
 
 import { saveTool, deleteTool } from "@/app/(protected)/tools/actions";
+import { Dropdown } from "@/components/dropdown";
 import { ActionButton, ActionForm } from "@/components/form";
 import { ToolParameterBuilder } from "@/components/tool-parameter-builder";
-import { Field, Input, Select, Textarea } from "@/components/ui";
+import { Field, Input, StaticValue, Textarea } from "@/components/ui";
 import type { Tool, ToolType } from "@/lib/types";
 
 const TOOL_TYPE_LABELS: Record<ToolType, string> = {
@@ -46,11 +47,11 @@ export function ToolForm({ tool }: { tool?: Tool }) {
       {tool && <input type="hidden" name="tool_id" value={tool.tool_id} />}
       <input type="hidden" name="tool_type" value={toolType} />
 
-      <div className="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <div className="space-y-5 rounded-lg border border-line bg-canvas-alt p-5">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Tool settings</h3>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            Configure the basic settings for this tool.
+          <h3 className="font-heading text-sm font-semibold text-strong">Tool settings</h3>
+          <p className="mt-1 text-xs text-muted">
+            What the model sees: the name it calls, and when it should call it.
           </p>
         </div>
 
@@ -61,21 +62,20 @@ export function ToolForm({ tool }: { tool?: Tool }) {
           hint="Fixed once created -- delete and recreate the tool if you need a different type."
         >
           {tool ? (
-            <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-              {TOOL_TYPE_LABELS[toolType]}
-            </p>
+            <StaticValue>{TOOL_TYPE_LABELS[toolType]}</StaticValue>
           ) : (
-            <Select
+            <Dropdown
               id={`tool-type-${suffix}`}
               value={toolType}
-              onChange={(e) => setToolType(e.target.value as ToolType)}
-            >
-              {(Object.entries(TOOL_TYPE_LABELS) as [ToolType, string][]).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
+              onValueChange={(next) => setToolType(next as ToolType)}
+              options={(Object.entries(TOOL_TYPE_LABELS) as [ToolType, string][]).map(
+                ([value, label]) => ({
+                  value,
+                  label: label.split(" -- ")[0],
+                  description: label.split(" -- ")[1],
+                }),
+              )}
+            />
           )}
         </Field>
 
@@ -147,7 +147,7 @@ export function ToolForm({ tool }: { tool?: Tool }) {
         </Field>
 
         {(toolType === "record_lead_info" || toolType === "record_callback_number") && (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="rounded-md border border-info-border bg-info-bg px-3 py-2 text-xs leading-relaxed text-info-text">
             {toolType === "record_lead_info"
               ? "Fixed behavior: captures the caller's name, company, need, and qualification answers into this call's log -- not configurable beyond name and description."
               : "Fixed behavior: captures a callback number into this call's log, and into the transfer-failed alert -- not configurable beyond name and description."}
@@ -156,10 +156,10 @@ export function ToolForm({ tool }: { tool?: Tool }) {
       </div>
 
       {toolType === "function" && (
-        <div className="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="space-y-4 rounded-lg border border-line bg-canvas-alt p-5">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Parameters</h3>
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            <h3 className="font-heading text-sm font-semibold text-strong">Parameters</h3>
+            <span className="rounded-pill bg-surface px-2 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-faint">
               Optional
             </span>
           </div>

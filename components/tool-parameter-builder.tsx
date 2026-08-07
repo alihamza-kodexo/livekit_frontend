@@ -2,7 +2,8 @@
 
 import { useId, useMemo, useState } from "react";
 
-import { Button, Field, Input, Select, Textarea } from "@/components/ui";
+import { Dropdown } from "@/components/dropdown";
+import { Button, Checkbox, Field, Input, Textarea } from "@/components/ui";
 
 type ParamType = "string" | "number" | "boolean" | "array";
 
@@ -176,17 +177,21 @@ export function ToolParameterBuilder({
     <div className="space-y-3">
       <input type="hidden" name={fieldName} value={compiledValue} />
 
-      <div className="flex gap-2">
+      {/* Segmented control rather than two competing buttons -- these are two
+          views of the same value, not two actions. */}
+      <div className="inline-flex gap-1 rounded-md border border-line bg-canvas-alt p-1">
         <Button
           type="button"
-          variant={mode === "simple" ? "primary" : "secondary"}
+          size="sm"
+          variant={mode === "simple" ? "primary" : "ghost"}
           onClick={switchToSimple}
         >
           Simple builder
         </Button>
         <Button
           type="button"
-          variant={mode === "advanced" ? "primary" : "secondary"}
+          size="sm"
+          variant={mode === "advanced" ? "primary" : "ghost"}
           onClick={switchToAdvanced}
         >
           Raw JSON
@@ -196,7 +201,7 @@ export function ToolParameterBuilder({
       {mode === "simple" ? (
         <div className="space-y-3">
           {rows.length === 0 && (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="text-sm text-muted">
               No parameters yet -- add one for each piece of information this tool needs, or leave
               empty for a tool that takes none.
             </p>
@@ -206,12 +211,12 @@ export function ToolParameterBuilder({
             return (
               <div
                 key={rowKeys[index]}
-                className="flex flex-wrap items-end gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+                className="flex flex-wrap items-end gap-3 rounded-md border border-line bg-canvas-alt p-3"
               >
                 <div className="min-w-40 flex-1">
                   <label
                     htmlFor={`${base}-name`}
-                    className={index === 0 ? "mb-1.5 block text-sm font-medium text-zinc-800 dark:text-zinc-200" : "sr-only"}
+                    className={index === 0 ? "mb-2 block text-sm font-medium text-body" : "sr-only"}
                   >
                     Parameter name
                   </label>
@@ -225,26 +230,24 @@ export function ToolParameterBuilder({
                 <div className="w-40">
                   <label
                     htmlFor={`${base}-type`}
-                    className={index === 0 ? "mb-1.5 block text-sm font-medium text-zinc-800 dark:text-zinc-200" : "sr-only"}
+                    className={index === 0 ? "mb-2 block text-sm font-medium text-body" : "sr-only"}
                   >
                     Type
                   </label>
-                  <Select
+                  <Dropdown
                     id={`${base}-type`}
                     value={row.type}
-                    onChange={(e) => updateRow(index, { type: e.target.value as ParamType })}
-                  >
-                    {Object.entries(TYPE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </Select>
+                    onValueChange={(next) => updateRow(index, { type: next as ParamType })}
+                    options={Object.entries(TYPE_LABELS).map(([value, label]) => ({
+                      value,
+                      label,
+                    }))}
+                  />
                 </div>
                 <div className="min-w-48 flex-1">
                   <label
                     htmlFor={`${base}-description`}
-                    className={index === 0 ? "mb-1.5 block text-sm font-medium text-zinc-800 dark:text-zinc-200" : "sr-only"}
+                    className={index === 0 ? "mb-2 block text-sm font-medium text-body" : "sr-only"}
                   >
                     What is this for?
                   </label>
@@ -255,26 +258,24 @@ export function ToolParameterBuilder({
                     onChange={(e) => updateRow(index, { description: e.target.value })}
                   />
                 </div>
-                <div className="flex items-center gap-2 pb-1.5">
-                  <input
+                <div className="flex items-center gap-2 pb-2">
+                  <Checkbox
                     id={`${base}-required`}
-                    type="checkbox"
                     checked={row.required}
                     onChange={(e) => updateRow(index, { required: e.target.checked })}
-                    className="size-4 rounded border-zinc-300 dark:border-zinc-600"
                   />
-                  <label htmlFor={`${base}-required`} className="text-sm text-zinc-700 dark:text-zinc-300">
+                  <label htmlFor={`${base}-required`} className="text-sm text-body">
                     Required
                   </label>
                 </div>
-                <Button type="button" variant="secondary" onClick={() => removeRow(index)}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(index)}>
                   Remove
                 </Button>
               </div>
             );
           })}
-          <Button type="button" variant="secondary" onClick={addRow}>
-            Add parameter
+          <Button type="button" variant="secondary" size="sm" onClick={addRow}>
+            + Add parameter
           </Button>
         </div>
       ) : (
@@ -291,7 +292,7 @@ export function ToolParameterBuilder({
             />
           </Field>
           {jsonError && (
-            <p className="text-sm text-red-600 dark:text-red-400">Invalid JSON: {jsonError}</p>
+            <p className="text-sm text-error-text">Invalid JSON: {jsonError}</p>
           )}
         </div>
       )}

@@ -9,8 +9,9 @@ import {
   disconnectExternalNumberAction,
   releaseNumberAction,
 } from "@/app/(protected)/numbers/actions";
+import { Dropdown } from "@/components/dropdown";
 import { ActionButton, ActionMessage } from "@/components/form";
-import { Badge, Button, Input, Mono, Select, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, Input, Mono, Table, Td, Th } from "@/components/ui";
 import { IDLE } from "@/lib/forms";
 import type { AgentStatus } from "@/lib/types";
 import type { OwnedNumber } from "@/lib/twilio";
@@ -108,29 +109,30 @@ export function OwnedNumbers({
           aria-label="Search numbers"
           className="sm:max-w-xs"
         />
-        <label className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="flex items-center gap-2 text-xs text-muted">
           Show
-          <Select
-            aria-label="Numbers per page"
-            value={pageSize}
-            onChange={(e) =>
-              setPageSize(e.target.value === "all" ? "all" : Number(e.target.value))
+          <Dropdown
+            ariaLabel="Numbers per page"
+            value={String(pageSize)}
+            onValueChange={(next) =>
+              setPageSize(next === "all" ? "all" : Number(next))
             }
-            className="w-auto py-1"
-          >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value="all">All</option>
-          </Select>
-        </label>
+            className="w-24"
+            options={[
+              { value: "5", label: "5" },
+              { value: "10", label: "10" },
+              { value: "all", label: "All" },
+            ]}
+          />
+        </span>
       </div>
       {filtered.length === 0 ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-muted">
           No numbers match &ldquo;{search}&rdquo;.
         </p>
       ) : (
         <>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-muted">
             {filtered.length} of {numbers.length} number{numbers.length === 1 ? "" : "s"}
           </p>
           <Table>
@@ -147,7 +149,7 @@ export function OwnedNumbers({
                 <tr key={number.sid}>
                   <Td>
                     <Mono>{number.phoneNumber}</Mono>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="text-xs text-muted">
                       {number.friendlyName}
                     </div>
                   </Td>
@@ -171,7 +173,7 @@ export function OwnedNumbers({
                             <Badge tone="violet">Live on {platform}</Badge>
                           </div>
                         ) : (
-                          <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                          <div className="mt-1 text-xs text-warning-text">
                             Currently calls <Mono>{number.voiceUrl}</Mono>
                           </div>
                         );
@@ -240,7 +242,7 @@ export function OwnedNumbers({
             </tbody>
           </Table>
           {pageSize !== "all" && totalPages > 1 && (
-            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between text-xs text-muted">
               <Button
                 type="button"
                 variant="secondary"
@@ -285,26 +287,26 @@ function AssignmentPicker({
     <form action={action} className="space-y-1">
       <input type="hidden" name="phone_number" value={number.phoneNumber} />
       <div className="flex items-center gap-2">
-        <Select
+        <Dropdown
           name="agent_id"
           defaultValue={number.assignedAgent?.agent_id ?? ""}
-          aria-label={`Agent answering ${number.phoneNumber}`}
+          ariaLabel={`Agent answering ${number.phoneNumber}`}
           disabled={pending}
           className="sm:w-52"
-        >
-          <option value="">Unassigned</option>
-          {agents.map((agent) => (
-            <option key={agent.agent_id} value={agent.agent_id}>
-              {agent.name}
-            </option>
-          ))}
-        </Select>
+          options={[
+            { value: "", label: "Unassigned" },
+            ...agents.map((agent) => ({
+              value: agent.agent_id,
+              label: agent.name,
+            })),
+          ]}
+        />
         <Button type="submit" variant="secondary" disabled={pending}>
           {pending ? "Saving…" : "Set"}
         </Button>
       </div>
       {number.assignedAgent && number.assignedAgent.status !== "active" && (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="text-xs text-warning-text">
           Assigned agent is {number.assignedAgent.status} — it won&apos;t answer
           this number yet.
         </p>

@@ -1,15 +1,37 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { JetBrains_Mono, Manrope, Outfit, Unbounded } from "next/font/google";
+
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/*
+ * The four faces from the Kodexo Labs visual identity (SOT §2), self-hosted by
+ * next/font. Each exposes a CSS variable that globals.css points the SOT's own
+ * `--font-*` tokens at.
+ *
+ * Unbounded carries H1 only, so it ships one weight rather than the full
+ * variable range. Outfit stands in for Bernabeu, which isn't a Google face --
+ * that substitution is the SOT's own documented fallback.
+ */
+const displayFont = Unbounded({
+  variable: "--font-unbounded",
+  subsets: ["latin"],
+  weight: ["900"],
+});
+
+const headingFont = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const bodyFont = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+});
+
+const monoFont = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
 
@@ -35,9 +57,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The theme script below sets data-theme on this element before React
+      // hydrates. Nothing here renders that attribute, so there's no value for
+      // React to disagree with -- this only silences the warning about the
+      // attribute existing at all.
+      suppressHydrationWarning
+      className={`${displayFont.variable} ${headingFont.variable} ${bodyFont.variable} ${monoFont.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <body className="flex min-h-full flex-col bg-canvas font-body text-body">
+        {/* First thing in the document, and synchronous: it has to resolve the
+            theme before the browser paints, or every load flashes light before
+            settling. See lib/theme.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {children}
       </body>
     </html>

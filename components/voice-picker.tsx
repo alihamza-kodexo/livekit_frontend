@@ -4,8 +4,11 @@ import { useMemo, useRef, useState } from "react";
 
 import { DEEPGRAM_VOICES, findDeepgramVoice, type DeepgramVoice } from "@/lib/deepgram-voices";
 
+/* Kept in step with the shared CONTROL in components/ui.tsx -- this is a
+ * combobox rather than a plain <input>, so it can't use the Input primitive,
+ * but it has to look identical to the fields around it. */
 const CONTROL =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+  "w-full rounded-md border border-input-line bg-input px-3 py-2 text-sm text-body transition-colors placeholder:text-faint focus:border-brand";
 
 const MAX_RESULTS = 40;
 
@@ -56,16 +59,27 @@ export function VoicePicker({
   // it doesn't clobber a just-picked model id with its own display label.
   const typedSinceSelect = useRef(false);
 
-  const results = useMemo(() => {
-    const filtered = query.trim()
-      ? DEEPGRAM_VOICES.filter((voice) => matches(voice, query))
-      : DEEPGRAM_VOICES;
-    return filtered.slice(0, MAX_RESULTS);
+  /**
+   * Everything matching the current query -- or the whole catalog when the box
+   * is simply displaying a selected voice.
+   *
+   * That second case matters: after picking a voice the input holds its display
+   * label ("Thalia -- English (American), Feminine"), and that label is a
+   * terrible search string. `matches` splits on whitespace and requires each
+   * term at a word boundary, so the "--" term matches nothing and the picker
+   * claimed "no catalog match -- will be saved as a raw model name" about a
+   * voice that was, in fact, selected from the catalog.
+   */
+  const matching = useMemo(() => {
+    const term = query.trim();
+    if (!term) return DEEPGRAM_VOICES;
+    const isSelectionLabel = DEEPGRAM_VOICES.some((voice) => labelFor(voice) === term);
+    if (isSelectionLabel) return DEEPGRAM_VOICES;
+    return DEEPGRAM_VOICES.filter((voice) => matches(voice, term));
   }, [query]);
-  const totalMatches = useMemo(
-    () => (query.trim() ? DEEPGRAM_VOICES.filter((voice) => matches(voice, query)).length : DEEPGRAM_VOICES.length),
-    [query],
-  );
+
+  const results = useMemo(() => matching.slice(0, MAX_RESULTS), [matching]);
+  const totalMatches = matching.length;
 
   function selectVoice(voice: DeepgramVoice) {
     typedSinceSelect.current = false;
@@ -115,10 +129,16 @@ export function VoicePicker({
         <div
           id={`${fieldName}-listbox`}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-line bg-surface py-1 shadow-lg"
         >
+          {/* Says whose catalog this is. There's exactly one TTS vendor in the
+              worker, but an agent row can still carry a stale provider name
+              from before that was true, so it's worth stating. */}
+          <p className="mono-kicker sticky top-0 border-b border-divider bg-surface px-3 py-2">
+            Deepgram Aura · {DEEPGRAM_VOICES.length} voices
+          </p>
           {results.length === 0 && (
-            <p className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="px-3 py-2 text-sm text-muted">
               No catalog match -- saving will use &ldquo;{query.trim()}&rdquo; as a raw model name.
             </p>
           )}
@@ -128,26 +148,26 @@ export function VoicePicker({
               type="button"
               role="option"
               aria-selected={voice.id === voiceId}
-              className="flex w-full flex-col items-start gap-0.5 px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-canvas-alt"
               onMouseDown={(event) => {
                 // Prevent the input's blur (which would fire before this click) from racing the selection.
                 event.preventDefault();
                 selectVoice(voice);
               }}
             >
-              <span className="text-sm text-zinc-900 dark:text-zinc-100">
+              <span className="text-sm font-medium text-strong">
                 {voice.name}{" "}
-                <span className="text-zinc-500 dark:text-zinc-400">
+                <span className="font-normal text-muted">
                   &middot; {voice.language} &middot; {voice.gender}
                 </span>
               </span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs text-faint">
                 {voice.tags.join(", ")} &middot; <span className="font-mono">{voice.id}</span>
               </span>
             </button>
           ))}
           {totalMatches > MAX_RESULTS && (
-            <p className="border-t border-zinc-100 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            <p className="border-t border-divider px-3 py-2 text-xs text-faint">
               {totalMatches - MAX_RESULTS} more match -- keep typing to narrow it down.
             </p>
           )}

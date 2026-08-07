@@ -9,6 +9,7 @@ import {
   EmptyState,
   Mono,
   OutcomeBadge,
+  PageBody,
   PageHeader,
   Table,
   Td,
@@ -28,13 +29,13 @@ export default async function CallsPage({
 }: PageProps<"/calls">) {
   if (!integrationStatus().supabase) {
     return (
-      <>
+      <PageBody>
         <PageHeader title="Call logs" />
         <ConfigNotice
           integration="Supabase"
           vars={["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]}
         />
-      </>
+      </PageBody>
     );
   }
 
@@ -67,7 +68,7 @@ export default async function CallsPage({
   const filtered = Object.keys(filters).length > 0;
 
   return (
-    <>
+    <PageBody>
       <PageHeader
         title="Call logs"
         description="Written by the n8n post-call workflow. Transcript and recording appear once that workflow is live."
@@ -105,7 +106,7 @@ export default async function CallsPage({
             <tbody>
               {calls.map((call) => (
                 <tr key={call.call_log_id}>
-                  <Td className="whitespace-nowrap text-zinc-500 dark:text-zinc-400">
+                  <Td className="whitespace-nowrap text-muted">
                     <Timestamp value={call.created_at} />
                   </Td>
                   <Td>
@@ -114,25 +115,25 @@ export default async function CallsPage({
                     ) : call.caller_number ? (
                       <Mono>{call.caller_number}</Mono>
                     ) : (
-                      <span className="text-zinc-400">unknown</span>
+                      <span className="text-faint">unknown</span>
                     )}
                   </Td>
                   <Td>
                     {call.agent_id ? (
                       <Link
                         href={`/agents/${call.agent_id}`}
-                        className="text-blue-600 hover:underline dark:text-blue-400"
+                        className="font-medium text-brand-deep underline-offset-2 hover:underline dark:text-brand"
                       >
                         {agentNames.get(call.agent_id) ?? "deleted agent"}
                       </Link>
                     ) : (
-                      <span className="text-zinc-400">—</span>
+                      <span className="text-faint">—</span>
                     )}
                   </Td>
                   <Td>
                     <OutcomeBadge outcome={call.outcome} />
                     {call.matched_department && (
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="text-xs text-muted">
                         → {call.matched_department}
                       </div>
                     )}
@@ -141,21 +142,21 @@ export default async function CallsPage({
                     {call.lead_name || call.lead_company ? (
                       <>
                         <div>{call.lead_name}</div>
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="text-xs text-muted">
                           {call.lead_company}
                         </div>
                       </>
                     ) : (
-                      <span className="text-zinc-400">—</span>
+                      <span className="text-faint">—</span>
                     )}
                   </Td>
-                  <Td className="text-right text-zinc-500 dark:text-zinc-400">
+                  <Td className="text-right text-muted">
                     <Duration seconds={call.duration_seconds} />
                   </Td>
                   <Td>
                     <Link
                       href={`/calls/${call.call_log_id}`}
-                      className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                      className="text-sm font-medium text-brand-deep underline-offset-2 hover:underline dark:text-brand"
                     >
                       Details
                     </Link>
@@ -166,13 +167,13 @@ export default async function CallsPage({
           </Table>
 
           {calls.length === PAGE_LIMIT && (
-            <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mt-4 text-sm text-muted">
               Showing the {PAGE_LIMIT} most recent matching calls. Narrow the date
               range to see older ones.
             </p>
           )}
         </Card>
       )}
-    </>
+    </PageBody>
   );
 }

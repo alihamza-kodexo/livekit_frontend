@@ -15,6 +15,7 @@ import {
   type ActionState,
 } from "@/lib/forms";
 import { voiceProviderEnv } from "@/lib/env";
+import { findGeminiVoice } from "@/lib/gemini-voices";
 import { db } from "@/lib/supabase";
 import type {
   AgentStatus,
@@ -320,6 +321,15 @@ export async function updateAgentVoice(
       settings[field] = value;
     }
 
+    // Validated against the catalog rather than passed through: unlike a
+    // Deepgram model name (where a raw string is legitimately useful for a
+    // brand-new release), Gemini Live rejects anything outside its fixed set,
+    // and it would only surface as a failed call.
+    const geminiVoice = optionalStr(form, "gemini_voice");
+    if (geminiVoice && !findGeminiVoice(geminiVoice)) {
+      return fail(`"${geminiVoice}" isn't one of Gemini Live's prebuilt voices.`);
+    }
+
     const dictionary: PronunciationEntry[] = [];
     for (const row of rows(form, ["term", "say_as"] as const)) {
       if (!row.term && !row.say_as) continue;
@@ -335,7 +345,11 @@ export async function updateAgentVoice(
         stt_provider: str(form, "stt_provider") || "deepgram",
         tts_provider: str(form, "tts_provider") || "deepgram",
         llm_provider: llmProvider,
+        // Both are always submitted, whichever engine is selected: the form
+        // keeps the inactive engine's picker mounted so switching back doesn't
+        // find its voice wiped (see sections.tsx VoiceConfigForm).
         voice_id: optionalStr(form, "voice_id"),
+        gemini_voice: geminiVoice,
         pronunciation_dictionary: dictionary,
         conversation_settings: settings,
       })

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
 import {
   attachTool,
@@ -10,10 +9,22 @@ import {
   updateAgentKnowledgeBase,
   updateAgentVoice,
 } from "@/app/(protected)/agents/actions";
+import { Dropdown } from "@/components/dropdown";
 import { ActionButton, ActionForm } from "@/components/form";
 import { RepeatableRows } from "@/components/repeatable-rows";
+import { GEMINI_DEFAULT_VOICE, GEMINI_VOICES } from "@/lib/gemini-voices";
 import { toolTypeMeta } from "@/lib/tool-display";
-import { Button, Field, Input, Select, Textarea } from "@/components/ui";
+import {
+  Button,
+  Chevron,
+  Field,
+  FieldSet,
+  Input,
+  StaticValue,
+  Textarea,
+  TextLink,
+  ToolTypeGlyph,
+} from "@/components/ui";
 import { VoicePicker } from "@/components/voice-picker";
 import type { Agent, FirstMessageMode, LLMProvider, Tool } from "@/lib/types";
 import {
@@ -23,10 +34,12 @@ import {
   LLM_PROVIDERS,
 } from "@/lib/types";
 
+/* Short enough to read in full inside the closed <select>; the trade-offs live
+ * in the tooltips below rather than being truncated mid-word. */
 const LLM_PROVIDER_LABELS: Record<LLMProvider, string> = {
-  groq: "Groq (Llama 3.3 70B) -- fast, default",
-  deepseek: "DeepSeek (v4 Flash) -- cheaper, slower",
-  gemini_live: "Gemini Live -- realtime, cheapest, fewer tuning options",
+  groq: "Groq — Llama 3.3 70B (default)",
+  deepseek: "DeepSeek — v4 Flash",
+  gemini_live: "Gemini Live — speech-to-speech",
 };
 
 /** Shown as each <option>'s hover tooltip (native `title` attribute). */
@@ -69,28 +82,24 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
       <input type="hidden" name="name" value={agent.name} />
       <input type="hidden" name="status" value={agent.status} />
 
-      <fieldset className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <legend className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Call opening
-        </legend>
+      <FieldSet legend="Call opening">
         <Field
           label="Who speaks first"
           htmlFor="first-message-mode"
           badge="required"
           hint="Controls only the very first line of the call -- everything after follows the prompt normally regardless of this setting."
         >
-          <Select
+          <Dropdown
             id="first-message-mode"
             name="first_message_mode"
             value={firstMessageMode}
-            onChange={(e) => setFirstMessageMode(e.target.value as FirstMessageMode)}
-          >
-            {FIRST_MESSAGE_MODES.map((mode) => (
-              <option key={mode} value={mode} title={FIRST_MESSAGE_TOOLTIPS[mode]}>
-                {FIRST_MESSAGE_LABELS[mode]}
-              </option>
-            ))}
-          </Select>
+            onValueChange={(next) => setFirstMessageMode(next as FirstMessageMode)}
+            options={FIRST_MESSAGE_MODES.map((mode) => ({
+              value: mode,
+              label: FIRST_MESSAGE_LABELS[mode],
+              description: FIRST_MESSAGE_TOOLTIPS[mode],
+            }))}
+          />
         </Field>
         {/* Stays mounted (just visually hidden) rather than unmounting when the
             mode changes -- so switching away and back doesn't lose whatever
@@ -111,7 +120,7 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
             />
           </Field>
         </div>
-      </fieldset>
+      </FieldSet>
 
       <Field
         label="System prompt"
@@ -128,16 +137,13 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
         />
       </Field>
 
-      <fieldset className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <legend className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Qualification criteria
-        </legend>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Optional overall — no rows means the agent qualifies freely from the
+      <FieldSet
+        legend="Qualification criteria"
+        description="Optional overall — no rows means the agent qualifies freely from the
           prompt alone. But once a row is started, both Key and What to find
           out become required for that row. The key is how the answer is
-          reported back in the call log, so it has to be identifier-safe.
-        </p>
+          reported back in the call log, so it has to be identifier-safe."
+      >
         <RepeatableRows
           addLabel="Add criterion"
           emptyHint="No criteria yet — the agent will qualify freely from the prompt alone."
@@ -163,12 +169,9 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
             criterion_required: String(c.required),
           }))}
         />
-      </fieldset>
+      </FieldSet>
 
-      <fieldset className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <legend className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          When to end the call
-        </legend>
+      <FieldSet legend="When to end the call">
         <Field
           label="End-call conditions"
           htmlFor="end-call-instructions"
@@ -196,7 +199,7 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
             placeholder="https://n8n.example.com/webhook/call-ended"
           />
         </Field>
-      </fieldset>
+      </FieldSet>
     </ActionForm>
   );
 }
@@ -205,7 +208,21 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
 /* Voice & humanness                                                          */
 /* -------------------------------------------------------------------------- */
 
-/** The FSD Section 4.3 tuning parameters, with the ranges the action enforces. */
+/**
+ * The FSD Section 4.3 tuning parameters, with the ranges the action enforces.
+ *
+ * `appliesTo` is the honest answer to "does moving this actually change a
+ * call?", read off the worker rather than assumed:
+ *
+ *  - "all"      -- reaches every engine. temperature and max_reply_sentences go
+ *                  into the model/prompt; the two turn-taking values go into
+ *                  AgentSession's TurnHandlingOptions, which wraps the realtime
+ *                  model too (see entrypoint.py `_turn_handling_from_settings`).
+ *  - "none"     -- stored, but nothing consumes it today. Deepgram Aura exposes
+ *                  no stability or rate control and the worker has no
+ *                  backchannel behaviour, so these are placeholders for a TTS
+ *                  vendor that supports them.
+ */
 const TUNING_FIELDS = [
   {
     name: "temperature",
@@ -214,6 +231,7 @@ const TUNING_FIELDS = [
     min: 0,
     max: 2,
     hint: "Lower is more predictable and on-script.",
+    appliesTo: "all",
   },
   {
     name: "max_reply_sentences",
@@ -222,22 +240,7 @@ const TUNING_FIELDS = [
     min: 1,
     max: 10,
     hint: "Long answers feel like a bot reading. Two is usually right.",
-  },
-  {
-    name: "tts_stability",
-    label: "TTS stability",
-    step: "0.05",
-    min: 0,
-    max: 1,
-    hint: "Higher is steadier but flatter.",
-  },
-  {
-    name: "speech_rate",
-    label: "Speech rate",
-    step: "0.05",
-    min: 0.5,
-    max: 2,
-    hint: "1.0 is the voice's natural pace.",
+    appliesTo: "all",
   },
   {
     name: "vad_threshold_ms",
@@ -246,6 +249,7 @@ const TUNING_FIELDS = [
     min: 100,
     max: 3000,
     hint: "Too low and the agent talks over a caller who paused to think.",
+    appliesTo: "all",
   },
   {
     name: "interruption_sensitivity",
@@ -254,6 +258,25 @@ const TUNING_FIELDS = [
     min: 0,
     max: 1,
     hint: "How readily barge-in stops the agent mid-sentence.",
+    appliesTo: "all",
+  },
+  {
+    name: "tts_stability",
+    label: "TTS stability",
+    step: "0.05",
+    min: 0,
+    max: 1,
+    hint: "Higher is steadier but flatter.",
+    appliesTo: "none",
+  },
+  {
+    name: "speech_rate",
+    label: "Speech rate",
+    step: "0.05",
+    min: 0.5,
+    max: 2,
+    hint: "1.0 is the voice's natural pace.",
+    appliesTo: "none",
   },
   {
     name: "backchannel_frequency",
@@ -262,30 +285,54 @@ const TUNING_FIELDS = [
     min: 0,
     max: 1,
     hint: 'How often it drops in an "mm-hm" while listening.',
+    appliesTo: "none",
   },
 ] as const;
 
+/** Shown against a field that the current configuration doesn't route to, so a
+ * value that will have no effect never looks like it's doing something. */
+function InactiveNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[0.6875rem] leading-relaxed text-warning-text">{children}</p>
+  );
+}
+
 export function VoiceConfigForm({ agent }: { agent: Agent }) {
   const tuningRef = useRef<HTMLDivElement>(null);
+  // Gemini Live is a speech-to-speech model: the worker hands it audio directly
+  // and builds no STT or TTS stage at all (see entrypoint.py
+  // `_build_session_kwargs`). Everything downstream of "there is a TTS step"
+  // therefore does nothing while it's selected -- tracked here so the form can
+  // say so instead of showing Deepgram as though it were still in the path.
+  const [llmProvider, setLlmProvider] = useState<LLMProvider>(agent.llm_provider);
+  const realtime = llmProvider === "gemini_live";
 
   return (
     <ActionForm action={updateAgentVoice} pendingLabel="Saving…">
       <input type="hidden" name="agent_id" value={agent.agent_id} />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {/* Fixed, not editable: the worker always uses Deepgram for both --
+        {/* Not editable: the worker always uses Deepgram for both --
             agent.stt_provider/tts_provider aren't read anywhere in the worker
             code, so an editable field here would silently do nothing. */}
-        <Field label="STT provider" badge="Fixed" hint="Fixed for every agent.">
-          <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-            Deepgram
-          </p>
+        <Field
+          label="Speech-to-text"
+          badge={realtime ? "Not used" : "Fixed"}
+          hint="Fixed for every agent that runs the STT/LLM/TTS pipeline. Gemini Live doesn't use a separate transcriber at all."
+        >
+          <StaticValue>
+            {realtime ? "Handled by Gemini Live" : "Deepgram"}
+          </StaticValue>
           <input type="hidden" name="stt_provider" value="deepgram" />
         </Field>
-        <Field label="TTS provider" badge="Fixed" hint="Fixed for every agent.">
-          <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-            Deepgram (Aura)
-          </p>
+        <Field
+          label="Text-to-speech"
+          badge={realtime ? "Not used" : "Fixed"}
+          hint="Fixed for every agent that runs the STT/LLM/TTS pipeline. Gemini Live generates its own audio."
+        >
+          <StaticValue>
+            {realtime ? "Handled by Gemini Live" : "Deepgram (Aura)"}
+          </StaticValue>
           <input type="hidden" name="tts_provider" value="deepgram" />
         </Field>
       </div>
@@ -295,32 +342,59 @@ export function VoiceConfigForm({ agent }: { agent: Agent }) {
           label="Conversation engine"
           htmlFor="llm-provider"
           badge="required"
-          hint="Groq is the fast default. DeepSeek is cheaper per-token but noticeably slower to respond. Gemini Live replaces the whole voice pipeline (no separate STT/TTS) -- cheapest option, but it drops the pronunciation dictionary and most tuning settings below. See VOICE_STACK_DECISION.md before switching a live agent."
+          hint="Groq is the fast default. DeepSeek is cheaper per-token but noticeably slower to respond. Gemini Live replaces the whole voice pipeline (no separate STT/TTS) -- cheapest option, but it drops the voice picker, the pronunciation dictionary, and the TTS tuning settings below. See VOICE_STACK_DECISION.md before switching a live agent."
         >
-          <Select id="llm-provider" name="llm_provider" defaultValue={agent.llm_provider}>
-            {LLM_PROVIDERS.map((provider) => (
-              <option key={provider} value={provider} title={LLM_PROVIDER_TOOLTIPS[provider]}>
-                {LLM_PROVIDER_LABELS[provider]}
-              </option>
-            ))}
-          </Select>
+          <Dropdown
+            id="llm-provider"
+            name="llm_provider"
+            value={llmProvider}
+            onValueChange={(next) => setLlmProvider(next as LLMProvider)}
+            options={LLM_PROVIDERS.map((provider) => ({
+              value: provider,
+              label: LLM_PROVIDER_LABELS[provider],
+              description: LLM_PROVIDER_TOOLTIPS[provider],
+            }))}
+          />
         </Field>
+        {/* One field, two catalogs. Each engine's picker stays mounted whichever
+            is selected -- unmounting one would drop its field from the
+            submission and wipe a voice that matters again the moment the engine
+            is switched back. They write to separate columns for the same reason
+            (see the 0018 migration). */}
         <Field
-          label="Voice ID"
-          htmlFor="voice-id"
+          label="Voice"
+          htmlFor={realtime ? "gemini-voice" : "voice-id"}
           badge="optional"
-          hint="Search by name, language, gender, or style. You can also paste a raw Deepgram model name directly. Leave blank to use the worker's default voice."
+          hint={
+            realtime
+              ? "Gemini Live speaks with one of its own prebuilt voices -- there's no separate TTS vendor to configure. Leave blank for the default (Puck)."
+              : "Search by name, language, gender, or style. You can also paste a raw Deepgram model name directly. Leave blank to use the worker's default voice."
+          }
         >
-          <VoicePicker id="voice-id" fieldName="voice_id" defaultValue={agent.voice_id ?? ""} />
+          <div hidden={realtime}>
+            <VoicePicker id="voice-id" fieldName="voice_id" defaultValue={agent.voice_id ?? ""} />
+          </div>
+          <div hidden={!realtime}>
+            <Dropdown
+              id="gemini-voice"
+              name="gemini_voice"
+              defaultValue={agent.gemini_voice ?? ""}
+              options={[
+                { value: "", label: `Worker default (${GEMINI_DEFAULT_VOICE})` },
+                ...GEMINI_VOICES.map((voice) => ({
+                  value: voice.id,
+                  label: voice.id,
+                  description: voice.character,
+                })),
+              ]}
+            />
+          </div>
         </Field>
       </div>
 
-      <fieldset className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <legend className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Conversation tuning
-        </legend>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+      <FieldSet legend="Conversation tuning">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="max-w-2xl text-xs leading-relaxed text-muted">
             Leave a field blank to use the worker&apos;s default, shown as the
             placeholder. &ldquo;Reset to default&rdquo; clears these fields --
             click Save afterward to persist it.
@@ -328,6 +402,7 @@ export function VoiceConfigForm({ agent }: { agent: Agent }) {
           <Button
             type="button"
             variant="secondary"
+            size="sm"
             onClick={() => {
               const inputs = tuningRef.current?.querySelectorAll("input");
               inputs?.forEach((input) => {
@@ -345,6 +420,7 @@ export function VoiceConfigForm({ agent }: { agent: Agent }) {
               label={field.label}
               htmlFor={`tuning-${field.name}`}
               hint={field.hint}
+              badge={field.appliesTo === "none" ? "No effect yet" : undefined}
             >
               <Input
                 id={`tuning-${field.name}`}
@@ -356,19 +432,29 @@ export function VoiceConfigForm({ agent }: { agent: Agent }) {
                 defaultValue={agent.conversation_settings[field.name] ?? ""}
                 placeholder={String(CONVERSATION_SETTING_DEFAULTS[field.name])}
               />
+              {field.appliesTo === "none" && (
+                <InactiveNote>
+                  Saved, but nothing reads it yet — Deepgram Aura has no such
+                  control.
+                </InactiveNote>
+              )}
             </Field>
           ))}
         </div>
-      </fieldset>
+      </FieldSet>
 
-      <fieldset className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <legend className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Pronunciation dictionary
-        </legend>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Applied to TTS output and used to boost the same terms in STT, so
-          &ldquo;Kodexo&rdquo; is both said and heard correctly.
-        </p>
+      <FieldSet
+        legend="Pronunciation dictionary"
+        description="Applied to TTS output and used to boost the same terms in STT, so
+          “Kodexo” is both said and heard correctly."
+      >
+        {realtime && (
+          <InactiveNote>
+            Not applied while Gemini Live is selected — the substitution hooks
+            into the Deepgram TTS step, which that engine replaces. Entries are
+            kept for when you switch back.
+          </InactiveNote>
+        )}
         <RepeatableRows
           addLabel="Add term"
           emptyHint="No overrides — every term uses the voice's default pronunciation."
@@ -391,7 +477,7 @@ export function VoiceConfigForm({ agent }: { agent: Agent }) {
             say_as: entry.say_as,
           }))}
         />
-      </fieldset>
+      </FieldSet>
     </ActionForm>
   );
 }
@@ -459,27 +545,22 @@ export function BuiltinTools() {
       {BUILTIN_TOOLS.map((tool) => (
         <details
           key={tool.id}
-          className="group rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+          className="group rounded-md border border-line bg-canvas-alt p-3"
         >
-          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-sm font-medium text-zinc-900 marker:content-none dark:text-zinc-100">
-            <span
-              aria-hidden
-              className="text-zinc-400 transition-transform group-open:rotate-90 dark:text-zinc-500"
-            >
-              ▸
-            </span>
+          <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-sm font-medium text-strong marker:content-none">
+            <Chevron />
             <span className="font-mono">{tool.name}</span>
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            <span className="rounded-pill bg-surface px-2 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-faint">
               Built in -- every agent
             </span>
           </summary>
-          <p className="mt-2 pl-5 text-xs text-zinc-500 dark:text-zinc-400">{tool.description}</p>
+          <p className="mt-2 pl-6 text-xs leading-relaxed text-muted">{tool.description}</p>
           {tool.parameters.length > 0 && (
-            <dl className="mt-2 space-y-1 border-t border-zinc-100 pt-2 pl-5 dark:border-zinc-900">
+            <dl className="mt-2.5 space-y-1 border-t border-divider pt-2.5 pl-6">
               {tool.parameters.map((param) => (
                 <div key={param.name} className="flex flex-wrap gap-x-2 text-xs">
-                  <dt className="font-mono text-zinc-600 dark:text-zinc-300">{param.name}</dt>
-                  <dd className="text-zinc-500 dark:text-zinc-400">
+                  <dt className="font-mono text-body">{param.name}</dt>
+                  <dd className="text-muted">
                     ({param.type}) {param.description}
                   </dd>
                 </div>
@@ -512,11 +593,8 @@ export function AgentToolsPanel({
   return (
     <div className="space-y-2">
       {allTools.length === 0 && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          No tools in the library yet --{" "}
-          <Link href="/tools" className="text-blue-600 hover:underline dark:text-blue-400">
-            create one
-          </Link>{" "}
+        <p className="text-sm text-muted">
+          No tools in the library yet -- <TextLink href="/tools">create one</TextLink>{" "}
           first, then come back here to attach it.
         </p>
       )}
@@ -526,24 +604,23 @@ export function AgentToolsPanel({
         return (
           <div
             key={tool.tool_id}
-            className="flex flex-wrap items-center gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+            className={
+              attached
+                ? "flex flex-wrap items-center gap-3 rounded-md border border-brand/40 bg-brand-tint/40 p-3"
+                : "flex flex-wrap items-center gap-3 rounded-md border border-line bg-canvas-alt p-3"
+            }
           >
-            <span
-              aria-hidden
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-500 text-xs font-bold text-white"
-            >
-              {icon}
-            </span>
+            <ToolTypeGlyph icon={icon} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                <span className="truncate font-mono text-sm font-medium text-strong">
                   {tool.name}
                 </span>
-                <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                <span className="rounded-pill bg-surface px-2 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-faint">
                   {badge}
                 </span>
               </div>
-              <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="mt-0.5 truncate text-xs text-muted">
                 {tool.description}
               </p>
             </div>
@@ -551,17 +628,15 @@ export function AgentToolsPanel({
               action={attached ? detachTool : attachTool}
               label={attached ? "Detach" : "Attach"}
               variant={attached ? "danger" : "secondary"}
+              size="sm"
               hidden={{ agent_id: agentId, tool_id: tool.tool_id }}
             />
           </div>
         );
       })}
-      <Link
-        href="/tools"
-        className="inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
-      >
+      <TextLink href="/tools" className="inline-block pt-1 text-sm">
         Manage tool definitions in the library →
-      </Link>
+      </TextLink>
     </div>
   );
 }

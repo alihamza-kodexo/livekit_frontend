@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { Button, Field, Select } from "@/components/ui";
+import { Dropdown } from "@/components/dropdown";
+import { Button, Field, Input } from "@/components/ui";
 import { CALL_OUTCOMES } from "@/lib/types";
 
 /**
@@ -30,60 +31,60 @@ export function CallFilters({
   return (
     <form action={apply} className="grid gap-4 sm:grid-cols-5">
       <Field label="Agent" htmlFor="filter-agent">
-        <Select
+        <Dropdown
           id="filter-agent"
           name="agent"
           defaultValue={params.get("agent") ?? ""}
-        >
-          <option value="">All agents</option>
-          {agents.map((agent) => (
-            <option key={agent.agent_id} value={agent.agent_id}>
-              {agent.name}
-            </option>
-          ))}
-        </Select>
+          options={[
+            { value: "", label: "All agents" },
+            ...agents.map((agent) => ({
+              value: agent.agent_id,
+              label: agent.name,
+            })),
+          ]}
+        />
       </Field>
 
       <Field label="Outcome" htmlFor="filter-outcome">
-        <Select
+        <Dropdown
           id="filter-outcome"
           name="outcome"
           defaultValue={params.get("outcome") ?? ""}
-        >
-          <option value="">All outcomes</option>
-          {CALL_OUTCOMES.map((outcome) => (
-            <option key={outcome} value={outcome}>
-              {outcome.replace(/_/g, " ")}
-            </option>
-          ))}
-        </Select>
+          options={[
+            { value: "", label: "All outcomes" },
+            ...CALL_OUTCOMES.map((outcome) => ({
+              value: outcome,
+              label: outcome.replace(/_/g, " "),
+            })),
+          ]}
+        />
       </Field>
 
       <Field label="From" htmlFor="filter-from">
-        <input
+        <Input
           id="filter-from"
           name="from"
           type="date"
           defaultValue={params.get("from") ?? ""}
-          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
       </Field>
 
       <Field label="To" htmlFor="filter-to">
-        <input
+        <Input
           id="filter-to"
           name="to"
           type="date"
           defaultValue={params.get("to") ?? ""}
-          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
       </Field>
 
       <div className="flex items-end gap-2">
-        <Button type="submit">Filter</Button>
+        <Button type="submit" variant="primary">
+          Filter
+        </Button>
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           onClick={() => router.push("/calls")}
         >
           Clear
