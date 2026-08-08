@@ -48,6 +48,12 @@ function testLog(event: string, detail?: unknown): void {
  * DIAGNOSTIC_TOPIC in agent-worker/src/worker/entrypoint.py. */
 const DIAGNOSTIC_TOPIC = "kodexo.diagnostic";
 
+// LiveKit's built-in chat topic. AgentSession already treats anything arriving
+// here as a user turn, so typing reaches the model by exactly the same path
+// speech would after transcription -- no worker-side handler needed. Must stay
+// equal to `TOPIC_CHAT` in livekit.agents.types.
+const CHAT_TOPIC = "lk.chat";
+
 /**
  * How long to wait for the worker to join before saying so. A dispatch that no
  * worker picks up produces no event at all -- nothing errors, nothing arrives,
@@ -387,17 +393,66 @@ function ConnectedPanelBody({
   const micLevel = useTrackVolume(micTrack);
   const micLive = isMicrophoneEnabled && micLevel > 0.01;
 
-  const messages = useMemo(
-    () =>
-      [...transcriptions]
-        .sort((a, b) => a.streamInfo.timestamp - b.streamInfo.timestamp)
-        .map((t) => ({
-          id: t.streamInfo.id,
-          text: t.text,
-          fromAgent: agent !== undefined && t.participantInfo.identity === agent.identity,
-        })),
-    [transcriptions, agent],
-  );
+  // The meter alone is too quiet a signal -- it sits in the status bar and is
+  // easy to never look at, which is exactly how a silent microphone reads as
+  // "the agent is broken". Once the mic has been flat for a stretch while the
+  // agent is up and waiting, say so outright.
+  // Gated on a boolean rather than the raw level: `micLevel` changes on every
+  // audio frame, so depending on it directly would clear and restart the timer
+  // continuously and it would never fire.
+  const micQuiet = isMicrophoneEnabled && micLevel <= 0.01;
+  // One timer for both directions: latch on after a sustained quiet spell, drop
+  // immediately once audio returns. Deferring the clear through the same timer
+  // keeps the state change out of the effect body itself.
+  const [micSilent, setMicSilent] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setMicSilent(micQuiet), micQuiet ? 6000 : 0);
+    return () => clearTimeout(id);
+  }, [micQuiet]);
+
+  // Typed messages are kept locally because nothing echoes them back: the
+  // session takes them straight into the chat context, so only the agent's
+  // side of a typed exchange ever arrives as a transcription.
+  const [typed, setTyped] = useState<{ id: string; text: string; at: number }[]>([]);
+  const [draft, setDraft] = useState("");
+  const [sendFailed, setSendFailed] = useState<string | null>(null);
+
+  // Anything sent before the agent's session is up is dropped on the floor --
+  // the text stream is delivered to a room where nothing is listening for it
+  // yet, and there is no error anywhere. On a loaded machine the agent can take
+  // ~17s to reach `listening`, so this is a wide window to type into and get
+  // silence back. Blocking the input is what makes that impossible rather than
+  // merely unlikely.
+  const agentReady =
+    agent !== undefined && (state === "listening" || state === "thinking" || state === "speaking");
+
+  const micDead = agentReady && micSilent;
+
+  const sendTyped = useCallback(async () => {
+    const text = draft.trim();
+    if (!text || !agentReady) return;
+    setDraft("");
+    setSendFailed(null);
+    setTyped((prev) => [...prev, { id: `typed-${prev.length}-${Date.now()}`, text, at: Date.now() }]);
+    try {
+      await localParticipant.sendText(text, { topic: CHAT_TOPIC });
+      testLog("typed message sent", { text });
+    } catch (err) {
+      testLog("TYPED MESSAGE FAILED", err);
+      setSendFailed(err instanceof Error ? err.message : String(err));
+    }
+  }, [draft, localParticipant, agentReady]);
+
+  const messages = useMemo(() => {
+    const spoken = transcriptions.map((t) => ({
+      id: t.streamInfo.id,
+      text: t.text,
+      at: t.streamInfo.timestamp,
+      fromAgent: agent !== undefined && t.participantInfo.identity === agent.identity,
+    }));
+    const written = typed.map((t) => ({ id: t.id, text: t.text, at: t.at, fromAgent: false }));
+    return [...spoken, ...written].sort((a, b) => a.at - b.at);
+  }, [transcriptions, agent, typed]);
 
   // Scrolls to the newest message as they arrive -- transcriptions stream in
   // piece by piece (a message's text keeps growing, not just new messages
@@ -416,7 +471,11 @@ function ConnectedPanelBody({
             {problem && (
               <div className="space-y-1.5 rounded-md border border-error-border bg-error-bg px-3 py-2.5">
                 <p className="font-heading text-sm font-semibold text-error-text">
-                  {diagnostic ? "The agent couldn't start" : "No agent joined"}
+                  {!diagnostic
+                    ? "No agent joined"
+                    : agent
+                      ? "The agent hit a problem mid-call"
+                      : "The agent couldn't start"}
                 </p>
                 <p className="text-[0.8125rem] leading-relaxed text-error-text">
                   {diagnostic ??
@@ -426,6 +485,19 @@ function ConnectedPanelBody({
                 </p>
                 <p className="pt-0.5 font-mono text-[0.6875rem] break-all text-faint">
                   room {room.name}
+                </p>
+              </div>
+            )}
+            {micDead && (
+              <div className="space-y-1.5 rounded-md border border-warning-border bg-warning-bg px-3 py-2.5">
+                <p className="font-heading text-sm font-semibold text-warning-text">
+                  Your microphone is sending silence
+                </p>
+                <p className="text-[0.8125rem] leading-relaxed text-warning-text">
+                  The agent is connected and waiting, but no sound is reaching it, so it has
+                  nothing to reply to. Check that the mic isn&apos;t muted below, that Windows is
+                  using the input you&apos;re speaking into, and that this site has permission for
+                  that device. You can still type below in the meantime.
                 </p>
               </div>
             )}
@@ -453,6 +525,41 @@ function ConnectedPanelBody({
                 </div>
               ))
             )}
+          </div>
+          {/* Typing is the microphone-free path to the agent: if a typed
+              message gets a spoken reply, the model, prompt and audio output
+              are all fine and any remaining fault is in the audio input. */}
+          <div className="shrink-0 border-t border-line px-3 py-2.5">
+            {sendFailed && (
+              <p className="pb-1.5 text-[0.75rem] text-error-text">
+                Couldn&apos;t send: {sendFailed}
+              </p>
+            )}
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendTyped();
+              }}
+            >
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                disabled={!agentReady}
+                placeholder={
+                  agentReady ? "Type a message to the agent…" : "Waiting for the agent to join…"
+                }
+                aria-label="Type a message to the agent"
+                className="min-w-0 flex-1 rounded-md border border-line bg-canvas-alt px-2.5 py-1.5 text-sm text-body placeholder:text-faint focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!draft.trim() || !agentReady}
+                className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-on-brand transition-colors hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Send
+              </button>
+            </form>
           </div>
         </>
       )}
