@@ -68,11 +68,48 @@ export async function createTestSession(agentId: string): Promise<TestSessionRes
     };
   } catch (error) {
     console.error("[kodexo-test] dispatch failed", error);
-    return {
-      error:
-        error instanceof Error
-          ? `Could not start a test session: ${error.message}`
-          : "Could not start a test session.",
-    };
+    return { error: `Could not start a test session: ${describeFailure(error)}` };
   }
+}
+
+/**
+ * Turns a connection failure into something you can act on.
+ *
+ * `fetch` in Node reports every transport-level problem as the bare string
+ * "fetch failed" and puts the real reason in `cause`. When several addresses
+ * were tried, `cause.message` is itself empty and the useful part is in
+ * `cause.errors`, one entry per address -- so the naive `error.message` a
+ * server action normally returns is the one string in the chain carrying no
+ * information at all.
+ *
+ * Reporting the addresses actually dialled, rather than guessing at a cause,
+ * is the point: it distinguishes wrong host, wrong port, refused, and DNS
+ * failure without anyone having to reason about which is likelier.
+ */
+function describeFailure(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown error.";
+
+  const parts: string[] = [];
+  let cause: unknown = error.cause;
+  for (let depth = 0; cause instanceof Error && depth < 3; depth++) {
+    // `address`/`port` are on Node's socket errors but absent from the
+    // ErrnoException type, so they're narrowed here rather than asserted away.
+    type DialError = Error & { code?: string; address?: string; port?: number };
+    const sub = (cause as { errors?: DialError[] }).errors;
+    if (Array.isArray(sub) && sub.length) {
+      for (const one of sub) {
+        const where = one.address ? ` ${one.address}:${one.port}` : "";
+        parts.push(`${one.code ?? one.message}${where}`);
+      }
+    } else {
+      const code = (cause as NodeJS.ErrnoException).code;
+      const text = [code, cause.message].filter(Boolean).join(": ");
+      if (text) parts.push(text);
+    }
+    cause = cause.cause;
+  }
+
+  const { url } = livekitEnv();
+  const detail = parts.length ? ` (${parts.join(", ")})` : "";
+  return `${error.message}${detail}. The dashboard is configured to reach LiveKit at ${url}.`;
 }
