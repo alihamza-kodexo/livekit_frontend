@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { ConnectNumber } from "@/app/(protected)/numbers/connect-number";
 import { OwnedNumbers, type NumberRow } from "@/app/(protected)/numbers/owned-numbers";
 import {
@@ -53,16 +55,16 @@ export default async function NumbersPage() {
     );
   }
 
-  const [agents, assignments, externalNumbers, numbersResult, trunkResult] =
+  // `describeSharedTrunk()` is deliberately NOT awaited here. It's two
+  // sequential Twilio REST calls -- the slowest thing on the page by a wide
+  // margin -- and it only feeds the routing-status card at the bottom. It
+  // streams in there instead of holding up the number tables above it.
+  const [agents, assignments, externalNumbers, numbersResult] =
     await Promise.all([
       listAgents(),
       numberAssignments(),
       listExternalNumbers(),
       listOwnedNumbers().then(
-        (data) => ({ ok: true as const, data }),
-        (error: unknown) => ({ ok: false as const, error }),
-      ),
-      describeSharedTrunk().then(
         (data) => ({ ok: true as const, data }),
         (error: unknown) => ({ ok: false as const, error }),
       ),
@@ -178,37 +180,61 @@ export default async function NumbersPage() {
         description="The static telephony setup every number depends on. Created once — see infra/README.md."
       >
         <dl className="space-y-4 text-sm">
-          <div>
-            <dt className="mono-kicker">Twilio shared trunk</dt>
-            <dd className="mt-1.5 text-muted">
-              {trunkResult.ok ? (
-                <>
-                  <Mono>{trunkResult.data.friendlyName}</Mono> (
-                  <Mono>{trunkResult.data.sid}</Mono>) →{" "}
-                  {trunkResult.data.originationUris.length > 0 ? (
-                    trunkResult.data.originationUris.map((uri) => (
-                      <Mono key={uri}>{uri}</Mono>
-                    ))
-                  ) : (
-                    <span className="text-error-text">
-                      no origination URI set — inbound calls have nowhere to go
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="text-error-text">
-                  Couldn&apos;t read the trunk:{" "}
-                  {trunkResult.error instanceof Error
-                    ? trunkResult.error.message
-                    : "unknown error"}
-                </span>
-              )}
-            </dd>
-          </div>
-          <LiveKitStatus configured={status.livekit} />
+          <Suspense fallback={<StatusRowSkeleton label="Twilio shared trunk" />}>
+            <TrunkStatus />
+          </Suspense>
+          <Suspense fallback={<StatusRowSkeleton label="LiveKit SIP" />}>
+            <LiveKitStatus configured={status.livekit} />
+          </Suspense>
         </dl>
       </Card>
     </PageBody>
+  );
+}
+
+/** Reads the shared trunk and where its origination URI points. */
+async function TrunkStatus() {
+  let trunk: Awaited<ReturnType<typeof describeSharedTrunk>>;
+  try {
+    trunk = await describeSharedTrunk();
+  } catch (error) {
+    return (
+      <div>
+        <dt className="mono-kicker">Twilio shared trunk</dt>
+        <dd className="mt-1.5 text-error-text">
+          Couldn&apos;t read the trunk:{" "}
+          {error instanceof Error ? error.message : "unknown error"}
+        </dd>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <dt className="mono-kicker">Twilio shared trunk</dt>
+      <dd className="mt-1.5 text-muted">
+        <Mono>{trunk.friendlyName}</Mono> (<Mono>{trunk.sid}</Mono>) →{" "}
+        {trunk.originationUris.length > 0 ? (
+          trunk.originationUris.map((uri) => <Mono key={uri}>{uri}</Mono>)
+        ) : (
+          <span className="text-error-text">
+            no origination URI set — inbound calls have nowhere to go
+          </span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+/** Placeholder for one `<dt>/<dd>` row while its provider call is in flight. */
+function StatusRowSkeleton({ label }: { label: string }) {
+  return (
+    <div>
+      <dt className="mono-kicker">{label}</dt>
+      <dd className="mt-1.5">
+        <div className="h-3.5 w-full max-w-md animate-pulse rounded bg-canvas-alt" />
+      </dd>
+    </div>
   );
 }
 

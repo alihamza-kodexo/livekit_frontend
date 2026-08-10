@@ -87,6 +87,9 @@ export function AgentsSidebar({ agents }: { agents: AgentListItem[] }) {
                     {agent.llm_provider === "gemini_live"
                       ? "gemini live · built-in voice"
                       : `${agent.llm_provider} · deepgram`}
+                    {/* `gemini` and `gemini_live` read almost identically at
+                        this size, so the pipeline one is spelled out by its
+                        Deepgram half above rather than by the provider name. */}
                   </div>
                 </Link>
               );

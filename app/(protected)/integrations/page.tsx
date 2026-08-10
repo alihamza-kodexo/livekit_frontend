@@ -1,5 +1,8 @@
+import { Suspense } from "react";
+
 import { CredentialsForm } from "@/app/(protected)/integrations/credentials-form";
 import { HealthBadge } from "@/components/health-badge";
+import { Bar, TableSkeleton } from "@/components/skeletons";
 import {
   Card,
   Code,
@@ -18,23 +21,13 @@ import {
   type SecretStatus,
 } from "@/lib/secrets";
 
-export default async function IntegrationsPage() {
-  const checks = await checkAllIntegrations();
-
+export default function IntegrationsPage() {
   // Masked previews only -- `secretStatuses` never returns a usable secret, so
-  // nothing here can leak one into the client payload.
+  // nothing here can leak one into the client payload. Reads process.env, so
+  // it's free and stays out of the streamed part below.
   const statuses: Record<string, SecretStatus> = Object.fromEntries(
     secretStatuses().map((status) => [status.name, status]),
   );
-  const broken = checks.filter((c) => isActiveError(c.status)).length;
-  const notConfigured = checks.filter((c) => c.status === "not_configured").length;
-  const ok = checks.filter((c) => c.status === "ok").length;
-
-  const tallies = [
-    { count: ok, label: "working", tone: "text-success-text" },
-    { count: broken, label: "broken", tone: "text-error-text" },
-    { count: notConfigured, label: "not configured", tone: "text-muted" },
-  ];
 
   return (
     <PageBody>
@@ -43,44 +36,14 @@ export default async function IntegrationsPage() {
         description="Live status for every external service the dashboard and worker depend on."
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {tallies.map((tally) => (
-          <div
-            key={tally.label}
-            className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-sm"
-          >
-            <p className={`font-display text-2xl leading-none ${tally.tone}`}>
-              {tally.count}
-            </p>
-            <p className="mono-kicker mt-2">{tally.label}</p>
-          </div>
-        ))}
-      </div>
-
-      <Card>
-        <Table>
-          <thead>
-            <tr>
-              <Th>Integration</Th>
-              <Th>Used for</Th>
-              <Th>Status</Th>
-              <Th>Detail</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {checks.map((check) => (
-              <tr key={check.name}>
-                <Td className="font-medium text-strong">{check.name}</Td>
-                <Td className="text-muted">{check.usedFor}</Td>
-                <Td>
-                  <HealthBadge status={check.status} />
-                </Td>
-                <Td className="max-w-md text-sm text-muted">{check.message}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      </Card>
+      {/* The checks themselves are half a dozen live API calls -- 1.2s warm and
+          2.6s cold when measured. Everything below them on this page (the
+          credential forms) is what people actually come here to edit, so the
+          status table streams in on its own rather than holding the forms
+          hostage to Twilio's response time. */}
+      <Suspense fallback={<HealthSkeleton />}>
+        <HealthReport />
+      </Suspense>
 
       <p className="max-w-3xl text-xs leading-relaxed text-faint">
         Checks run fresh on every page load -- a passing check means the key was
@@ -130,5 +93,83 @@ export default async function IntegrationsPage() {
         those in <Code>dashboard/.env.local</Code> and restart.
       </p>
     </PageBody>
+  );
+}
+
+/** The tallies and the status table -- everything that needs the live checks. */
+async function HealthReport() {
+  const checks = await checkAllIntegrations();
+
+  const broken = checks.filter((c) => isActiveError(c.status)).length;
+  const notConfigured = checks.filter((c) => c.status === "not_configured").length;
+  const ok = checks.filter((c) => c.status === "ok").length;
+
+  const tallies = [
+    { count: ok, label: "working", tone: "text-success-text" },
+    { count: broken, label: "broken", tone: "text-error-text" },
+    { count: notConfigured, label: "not configured", tone: "text-muted" },
+  ];
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {tallies.map((tally) => (
+          <div
+            key={tally.label}
+            className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-sm"
+          >
+            <p className={`font-display text-2xl leading-none ${tally.tone}`}>
+              {tally.count}
+            </p>
+            <p className="mono-kicker mt-2">{tally.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <Card>
+        <Table>
+          <thead>
+            <tr>
+              <Th>Integration</Th>
+              <Th>Used for</Th>
+              <Th>Status</Th>
+              <Th>Detail</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {checks.map((check) => (
+              <tr key={check.name}>
+                <Td className="font-medium text-strong">{check.name}</Td>
+                <Td className="text-muted">{check.usedFor}</Td>
+                <Td>
+                  <HealthBadge status={check.status} />
+                </Td>
+                <Td className="max-w-md text-sm text-muted">{check.message}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Card>
+    </>
+  );
+}
+
+/** Same shape as HealthReport, so the forms below don't jump when it lands. */
+function HealthSkeleton() {
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-sm"
+          >
+            <Bar className="h-6 w-8" />
+            <Bar className="mt-2.5 h-2.5 w-24" />
+          </div>
+        ))}
+      </div>
+      <TableSkeleton rows={9} cols={4} />
+    </>
   );
 }

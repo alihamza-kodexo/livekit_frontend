@@ -10,7 +10,7 @@ import {
 } from "@/app/(protected)/agents/[agentId]/sections";
 import { AgentIdentityForm } from "@/app/(protected)/agents/[agentId]/identity-form";
 import { AgentModelSummary } from "@/app/(protected)/agents/[agentId]/model-summary";
-import { TestAgentPanel } from "@/app/(protected)/agents/[agentId]/test-panel";
+import { TestAgentPanelLoader } from "@/app/(protected)/agents/[agentId]/test-panel-loader";
 import {
   Card,
   CollapsibleCard,
@@ -30,13 +30,17 @@ export default async function AgentPage({
   const { agentId } = await params;
   const { tab } = await searchParams;
 
-  const agent = await getAgent(agentId);
-  if (!agent) notFound();
-
-  const [allTools, agentTools] = await Promise.all([
+  // All three in one round trip's worth of wall-clock. Neither tool query
+  // depends on the agent row, so awaiting `getAgent` first -- as this used to
+  // -- just spent an extra ~400ms Supabase round trip before the other two
+  // were even sent.
+  const [agent, allTools, agentTools] = await Promise.all([
+    getAgent(agentId),
     listAllTools(),
     listAgentTools(agentId),
   ]);
+  if (!agent) notFound();
+
   const selectedToolIds = new Set(agentTools.map((t) => t.tool_id));
 
   const defaultTab = typeof tab === "string" ? tab : undefined;
@@ -78,7 +82,10 @@ export default async function AgentPage({
           actions={
             <>
               <AgentIdentityForm agent={agent} />
-              <TestAgentPanel agentId={agent.agent_id} agentName={agent.name} />
+              <TestAgentPanelLoader
+                agentId={agent.agent_id}
+                agentName={agent.name}
+              />
             </>
           }
         />

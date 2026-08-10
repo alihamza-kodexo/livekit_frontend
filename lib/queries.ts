@@ -91,19 +91,37 @@ export type CallLogFilters = {
 /** Call log list rows omit `transcript` — it's fetched only on the detail view. */
 export type CallLogListItem = Omit<CallLog, "transcript">;
 
+/** One page of call logs, plus how many rows match the filters in total. */
+export type CallLogPage = {
+  rows: CallLogListItem[];
+  /** Across all pages, for the same filters — what the pager counts against. */
+  total: number;
+};
+
+/**
+ * A single page of call logs, newest first.
+ *
+ * `count: "exact"` rides along on the same request rather than costing a
+ * second round trip for the total. It's a real `COUNT(*)` over the matching
+ * rows, which is the right trade here: the filters are all indexed columns and
+ * this table grows by one row per phone call, not per event. If it ever gets
+ * big enough for that count to hurt, `"planned"` gives a query-planner
+ * estimate for the same shape of result.
+ */
 export async function listCallLogs(
   filters: CallLogFilters,
-  limit = 100,
-): Promise<CallLogListItem[]> {
+  { limit, offset }: { limit: number; offset: number },
+): Promise<CallLogPage> {
   let query = db()
     .from("call_logs")
     .select(
       "call_log_id, call_sid, room_id, agent_id, caller_number, recording_url, " +
         "duration_seconds, outcome, matched_department, lead_name, lead_company, " +
         "lead_need, is_test, created_at",
+      { count: "exact" },
     )
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (filters.agentId) query = query.eq("agent_id", filters.agentId);
   if (filters.outcome) query = query.eq("outcome", filters.outcome);
@@ -111,7 +129,13 @@ export async function listCallLogs(
   // `to` is an inclusive day, so compare against the end of that day.
   if (filters.to) query = query.lte("created_at", `${filters.to}T23:59:59.999Z`);
 
-  return (await expect(query, "listCallLogs")) as unknown as CallLogListItem[];
+  const { data, error, count } = await query;
+  if (error) throw new Error(`listCallLogs: ${error.message}`);
+
+  return {
+    rows: (data ?? []) as unknown as CallLogListItem[],
+    total: count ?? 0,
+  };
 }
 
 export async function getCallLog(callLogId: string): Promise<CallLog | null> {

@@ -44,8 +44,12 @@ function missingProviderKeyMessage(llmProvider: LLMProvider): string | null {
   if (llmProvider === "deepseek" && !env.deepseekApiKey) {
     return "This agent's conversation engine is DeepSeek, but DEEPSEEK_API_KEY isn't set -- set it, or switch engines on the Voice & humanness tab, before activating.";
   }
-  if (llmProvider === "gemini_live" && !env.geminiApiKey) {
-    return "This agent's conversation engine is Gemini Live, but GEMINI_API_KEY isn't set -- set it, or switch engines on the Voice & humanness tab, before activating.";
+  // Both Gemini engines read the same key, so one check covers them -- but the
+  // message names the engine the admin actually picked, since "Gemini Flash"
+  // and "Gemini Live" are separate options in the picker.
+  if ((llmProvider === "gemini" || llmProvider === "gemini_live") && !env.geminiApiKey) {
+    const engine = llmProvider === "gemini" ? "Gemini Flash" : "Gemini Live";
+    return `This agent's conversation engine is ${engine}, but GEMINI_API_KEY isn't set -- set it, or switch engines on the Voice & humanness tab, before activating.`;
   }
   return null;
 }
@@ -131,7 +135,7 @@ export async function updateAgentCore(
         .maybeSingle();
       if (fetchError) return fail(fetchError.message);
       const providerError = missingProviderKeyMessage(
-        (current?.llm_provider as LLMProvider) ?? "groq",
+        (current?.llm_provider as LLMProvider) ?? "gemini",
       );
       if (providerError) return fail(providerError);
     }
@@ -237,7 +241,7 @@ export async function updateAgentIdentity(
         );
       }
       const providerError = missingProviderKeyMessage(
-        (current.llm_provider as LLMProvider) ?? "groq",
+        (current.llm_provider as LLMProvider) ?? "gemini",
       );
       if (providerError) return fail(providerError);
     }

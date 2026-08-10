@@ -77,9 +77,17 @@ const AGENT_JOIN_TIMEOUT_MS = 12_000;
 export function TestAgentPanel({
   agentId,
   agentName,
+  autoStart = false,
 }: {
   agentId: string;
   agentName: string;
+  /**
+   * Start a session as soon as this mounts. Set by test-panel-loader.tsx,
+   * which only mounts this module once the button has been clicked -- so the
+   * click that pulled in the LiveKit chunk is also the click that connects,
+   * rather than asking for a second one.
+   */
+  autoStart?: boolean;
 }) {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +118,15 @@ export function TestAgentPanel({
     });
     setSession(result);
   }, [agentId]);
+
+  // Guarded by a ref rather than the effect's deps: `start` is recreated
+  // whenever agentId changes, and a second run would open a second session.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    void start();
+  }, [autoStart, start]);
 
   const closeWidget = useCallback(() => {
     setSession(null);
@@ -296,6 +313,68 @@ function formatElapsed(totalSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * Why the microphone isn't capturing, in the caller's terms -- or null when
+ * there's nothing wrong with it.
+ *
+ * This exists because a mic that never opens at all was completely invisible
+ * here. The "sending silence" warning further down only fires when the track
+ * IS enabled and flat, so permission-denied, no-device and non-secure-origin --
+ * every case where capture never starts -- rendered a panel that looked
+ * perfectly healthy while the agent could not hear a thing. Chat kept working
+ * throughout (it's a data channel, no capture involved), which made it read as
+ * "the agent ignores speech" rather than "this browser never gave us a mic".
+ *
+ * The secure-context branch is the one worth knowing about: browsers only
+ * expose getUserMedia on HTTPS or localhost, so the dashboard served over plain
+ * HTTP at an IP address has no microphone API at all -- `navigator.mediaDevices`
+ * is undefined, nothing throws, and no permission prompt ever appears.
+ */
+async function describeMicrophoneProblem(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+
+  if (!window.isSecureContext) {
+    return (
+      `This page is served over plain HTTP (${window.location.origin}), and browsers ` +
+      `only allow microphone access on HTTPS or localhost. That's why no permission ` +
+      `prompt appeared. Put the dashboard behind HTTPS, or open it at http://localhost ` +
+      `to test with audio. Typing below works either way.`
+    );
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return "This browser doesn't expose a microphone API. Try current Chrome, Edge or Firefox.";
+  }
+
+  try {
+    // Opened and immediately released -- this is a probe for the reason, not a
+    // capture. Leaving the device held would keep LiveKit from acquiring it.
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    return null;
+  } catch (error) {
+    const name = error instanceof DOMException ? error.name : "";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return (
+        "This site is blocked from using the microphone. Click the padlock (or camera) " +
+        "icon in the address bar, set Microphone to Allow, and start the test again."
+      );
+    }
+    if (name === "NotFoundError" || name === "OverconstrainedError") {
+      return "No microphone was found. Plug one in, or pick a different input device in the OS sound settings.";
+    }
+    if (name === "NotReadableError") {
+      return (
+        "The microphone is held by another application (Zoom, Teams, Meet, OBS). " +
+        "Close whatever is using it and start the test again."
+      );
+    }
+    return `The microphone couldn't be opened: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
+  }
+}
+
 /** Rendered inside the LiveKitRoom -- header, live transcript, and the
  * mic/hang-up-equipped status bar, all as plain flex children of PanelShell. */
 function ConnectedPanelBody({
@@ -400,6 +479,22 @@ function ConnectedPanelBody({
   // Gated on a boolean rather than the raw level: `micLevel` changes on every
   // audio frame, so depending on it directly would clear and restart the timer
   // continuously and it would never fire.
+  // Runs once per connected session, regardless of whether the mic looks fine --
+  // the answer is needed the moment `isMicrophoneEnabled` turns out false, and
+  // asking only then would race LiveKit's own acquisition attempt.
+  const [micProblem, setMicProblem] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void describeMicrophoneProblem().then((problem) => {
+      if (cancelled) return;
+      if (problem) testLog("MICROPHONE UNAVAILABLE", problem);
+      setMicProblem(problem);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const micQuiet = isMicrophoneEnabled && micLevel <= 0.01;
   // One timer for both directions: latch on after a sustained quiet spell, drop
   // immediately once audio returns. Deferring the clear through the same timer
@@ -488,7 +583,21 @@ function ConnectedPanelBody({
                 </p>
               </div>
             )}
-            {micDead && (
+            {/* The mic never opened. Distinct from the silence warning below,
+                which assumes a working capture that happens to be quiet -- this
+                one means no audio path exists at all, and it's the case that
+                previously showed nothing whatsoever. */}
+            {micProblem && (
+              <div className="space-y-1.5 rounded-md border border-error-border bg-error-bg px-3 py-2.5">
+                <p className="font-heading text-sm font-semibold text-error-text">
+                  The agent can&apos;t hear you — no microphone
+                </p>
+                <p className="text-[0.8125rem] leading-relaxed text-error-text">
+                  {micProblem}
+                </p>
+              </div>
+            )}
+            {micDead && !micProblem && (
               <div className="space-y-1.5 rounded-md border border-warning-border bg-warning-bg px-3 py-2.5">
                 <p className="font-heading text-sm font-semibold text-warning-text">
                   Your microphone is sending silence

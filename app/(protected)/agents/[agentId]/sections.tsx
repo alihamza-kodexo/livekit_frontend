@@ -37,16 +37,21 @@ import {
 /* Short enough to read in full inside the closed <select>; the trade-offs live
  * in the tooltips below rather than being truncated mid-word. */
 const LLM_PROVIDER_LABELS: Record<LLMProvider, string> = {
-  groq: "Groq — Llama 3.3 70B (default)",
+  gemini: "Gemini Flash — fastest (default)",
   deepseek: "DeepSeek — v4 Flash",
+  groq: "Groq — Llama 3.3 70B",
   gemini_live: "Gemini Live — speech-to-speech",
 };
 
 /** Shown as each <option>'s hover tooltip (native `title` attribute). */
 const LLM_PROVIDER_TOOLTIPS: Record<LLMProvider, string> = {
-  groq: "Fast responses via Llama 3.3 70B on Groq's LPU hardware. Best default for natural call latency.",
-  deepseek: "Cheaper per output token than Groq, but DeepSeek's API adds roughly 1.5s of extra latency per turn -- noticeable to callers.",
-  gemini_live: "Google's realtime speech-to-speech model. Skips separate STT/TTS entirely, so it's the cheapest option -- but it can't use the pronunciation dictionary, and it decides turn-taking itself rather than through the settings below.",
+  gemini:
+    "Gemini Flash as a text model inside the Deepgram pipeline, with reasoning turned off. Fastest measured time to first word (~0.5s), and it keeps every turn-taking setting below. Best default for call latency.",
+  deepseek:
+    "Cheaper per output token, but roughly 0.1-0.15s slower to first word than Gemini Flash against DeepSeek's own API. Point DEEPSEEK_BASE_URL at a faster host (DeepInfra, Together) to close most of that gap.",
+  groq: "Llama 3.3 70B on Groq's LPU hardware. Kept as a fallback -- this account's Groq key is currently being rejected, so an agent set to it will fail when it takes a call.",
+  gemini_live:
+    "Google's realtime speech-to-speech model. Skips separate STT/TTS entirely, so it's the cheapest option -- but it can't use the pronunciation dictionary, and it decides turn-taking itself rather than through the settings below, which makes it fragile on a noisy phone line.",
 };
 
 const FIRST_MESSAGE_LABELS: Record<FirstMessageMode, string> = {

@@ -36,11 +36,19 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const { data } = await supabase.auth.getUser();
+  // `getClaims()` rather than `getUser()`: this runs on every request the
+  // matcher below lets through -- including the RSC fetch behind every single
+  // client-side navigation -- and `getUser()` is a round trip to the auth
+  // server each time (~400ms from here). `getClaims()` verifies the token's
+  // signature locally against the project's public JWK, falling back to
+  // `getUser()` by itself if the project isn't on asymmetric keys. Either way
+  // the session cookie still gets refreshed, because both read the session
+  // through the cookie adapter above.
+  const { data } = await supabase.auth.getClaims();
 
   const isPublicPath = request.nextUrl.pathname.startsWith("/login");
 
-  if (!data.user && !isPublicPath) {
+  if (!data?.claims && !isPublicPath) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

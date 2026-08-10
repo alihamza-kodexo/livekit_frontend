@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CallFilters } from "@/app/(protected)/calls/filters";
+import { Pagination } from "@/components/pagination";
 import {
   Badge,
   Card,
@@ -20,7 +21,7 @@ import { integrationStatus } from "@/lib/env";
 import { listAgents, listCallLogs, type CallLogFilters } from "@/lib/queries";
 import { CALL_OUTCOMES, type CallOutcome } from "@/lib/types";
 
-const PAGE_LIMIT = 100;
+const PAGE_SIZE = 50;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -59,9 +60,18 @@ export default async function CallsPage({
     ...(to && ISO_DATE.test(to) ? { to } : {}),
   };
 
-  const [agents, calls] = await Promise.all([
+  // Anything that isn't a positive integer -- "0", "-3", "abc", "1e9" -- falls
+  // back to the first page rather than producing a negative range offset.
+  const requestedPage = Number(single("page"));
+  const page =
+    Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+
+  const [agents, { rows: calls, total }] = await Promise.all([
     listAgents(),
-    listCallLogs(filters, PAGE_LIMIT),
+    listCallLogs(filters, {
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
   ]);
 
   const agentNames = new Map(agents.map((a) => [a.agent_id, a.name]));
@@ -80,7 +90,7 @@ export default async function CallsPage({
         />
       </Card>
 
-      {calls.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           title={filtered ? "No calls match those filters" : "No calls logged yet"}
           description={
@@ -89,6 +99,23 @@ export default async function CallsPage({
               : "Once a call completes, the n8n workflow writes a row here."
           }
         />
+      ) : calls.length === 0 ? (
+        // There are matching calls, just not this far in -- a hand-edited or
+        // stale `?page=`. Keep the pager so there's a way back to them.
+        <Card>
+          <EmptyState
+            title="Nothing on this page"
+            description="There are fewer pages of results than this. Step back to see them."
+          />
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            basePath="/calls"
+            params={params}
+            unit="calls"
+          />
+        </Card>
       ) : (
         <Card>
           <Table>
@@ -166,12 +193,14 @@ export default async function CallsPage({
             </tbody>
           </Table>
 
-          {calls.length === PAGE_LIMIT && (
-            <p className="mt-4 text-sm text-muted">
-              Showing the {PAGE_LIMIT} most recent matching calls. Narrow the date
-              range to see older ones.
-            </p>
-          )}
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            basePath="/calls"
+            params={params}
+            unit="calls"
+          />
         </Card>
       )}
     </PageBody>

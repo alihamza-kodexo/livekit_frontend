@@ -10,8 +10,9 @@ import type { Agent, LLMProvider } from "@/lib/types";
  * two-line summary card.
  */
 const LLM_SUMMARY: Record<LLMProvider, { name: string; note: string }> = {
-  groq: { name: "Groq", note: "Llama 3.3 70B -- fast, default" },
+  gemini: { name: "Gemini Flash", note: "Fastest to first word -- default" },
   deepseek: { name: "DeepSeek", note: "v4 Flash -- cheaper, slower" },
+  groq: { name: "Groq", note: "Llama 3.3 70B -- key currently rejected" },
   gemini_live: { name: "Gemini Live", note: "Realtime speech-to-speech" },
 };
 

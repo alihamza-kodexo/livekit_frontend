@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { authEnv } from "@/lib/env";
 import { db } from "@/lib/supabase";
@@ -12,13 +13,31 @@ export type SessionUser = {
   email: string;
 };
 
-/** Null if there's no session, or the session's JWT has no email on it. */
-export async function getSessionUser(): Promise<SessionUser | null> {
+/**
+ * Null if there's no session, or the session's JWT has no email on it.
+ *
+ * Uses `getClaims()` rather than `getUser()`. Both are verified checks, but
+ * `getUser()` always costs a round trip to the auth server to ask whether a
+ * token is good -- about 400ms from here, on every render of every protected
+ * page. `getClaims()` verifies the signature itself against the project's
+ * public JWK (this project signs with ES256, and the key set is cached after
+ * the first fetch), so the usual case is local and free. If a project is still
+ * on legacy HS256 symmetric secrets, or WebCrypto isn't available, it falls
+ * back to `getUser()` on its own -- so this is never weaker than what it
+ * replaced, only faster when it can be.
+ *
+ * Wrapped in React `cache()` so a request that checks twice -- the layout and
+ * a server action in the same pass -- verifies once.
+ */
+export const getSessionUser = cache(async function getSessionUser(): Promise<
+  SessionUser | null
+> {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user?.email) return null;
-  return { id: data.user.id, email: data.user.email };
-}
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims?.email || !claims.sub) return null;
+  return { id: claims.sub, email: claims.email };
+});
 
 /**
  * The allowlist gate: Supabase Auth will happily authenticate any email that
@@ -27,7 +46,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
  * anon/authenticated grant (see the 0003 migration), so there's no other way
  * to read it from app code.
  */
-export async function isEmailAllowed(email: string): Promise<boolean> {
+export const isEmailAllowed = cache(async function isEmailAllowed(
+  email: string,
+): Promise<boolean> {
   const { data, error } = await db()
     .from("allowed_users")
     .select("email")
@@ -35,7 +56,7 @@ export async function isEmailAllowed(email: string): Promise<boolean> {
     .maybeSingle();
   if (error) throw new Error(`isEmailAllowed: ${error.message}`);
   return data !== null;
-}
+});
 
 /**
  * Re-checks the signed-in admin's own password, for actions that shouldn't ride

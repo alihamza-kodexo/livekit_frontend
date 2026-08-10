@@ -11,14 +11,25 @@ export const AGENT_STATUSES: AgentStatus[] = ["active", "paused", "draft"];
 
 /**
  * Switchable anytime, no worker redeploy -- see VOICE_STACK_DECISION.md.
+ *
+ * "gemini", "deepseek" and "groq" are text LLMs inside the same Deepgram
+ * STT+TTS pipeline, so all three keep the pronunciation dictionary and every
+ * tuning knob below; they differ only in which model writes the words.
+ *
  * "gemini_live" is a different shape: a realtime speech-to-speech model that
  * replaces the whole STT+LLM+TTS pipeline, not just the LLM leg -- it gives
- * up the pronunciation dictionary and most tuning knobs below in exchange
- * for lower cost. Groq/DeepSeek keep the pipeline and all of those.
+ * up the pronunciation dictionary and most tuning knobs below, and decides
+ * turn-taking server-side, in exchange for lower cost.
  */
-export type LLMProvider = "groq" | "deepseek" | "gemini_live";
+export type LLMProvider = "gemini" | "deepseek" | "groq" | "gemini_live";
 
-export const LLM_PROVIDERS: LLMProvider[] = ["groq", "deepseek", "gemini_live"];
+/** Ordered fastest-first -- this is the order the picker renders in. */
+export const LLM_PROVIDERS: LLMProvider[] = [
+  "gemini",
+  "deepseek",
+  "groq",
+  "gemini_live",
+];
 
 /** How the agent opens a call -- see flow.py's on_enter for what each does. */
 export type FirstMessageMode = "agent_generates" | "agent_says_exact" | "user_starts";

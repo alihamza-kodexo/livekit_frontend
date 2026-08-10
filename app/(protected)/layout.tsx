@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { cookies } from "next/headers";
 
 import { requireAllowedUser } from "@/lib/auth";
@@ -41,7 +42,15 @@ export default async function ProtectedLayout({
           `sm`; from `sm` up the rail is an in-flow column and there's nothing
           overlapping to clear. */}
       <div className="flex min-w-0 flex-1 flex-col pt-14 sm:pt-0">
-        <IntegrationAlertBanner />
+        {/* Streamed, never awaited. The banner live-pings Twilio, LiveKit,
+            Deepgram, Groq, DeepSeek and Gemini -- measured at 1.2s warm and
+            2.6s cold, which is otherwise 1.2s+ added to the first paint of
+            every page in the dashboard. It renders nothing at all in the
+            common case (no broken integration), so there is no fallback and
+            nothing shifts when it resolves. */}
+        <Suspense fallback={null}>
+          <IntegrationAlertBanner />
+        </Suspense>
         {children}
       </div>
     </div>
