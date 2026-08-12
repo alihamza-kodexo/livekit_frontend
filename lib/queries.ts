@@ -116,8 +116,8 @@ export async function listCallLogs(
     .from("call_logs")
     .select(
       "call_log_id, call_sid, room_id, agent_id, caller_number, recording_url, " +
-        "duration_seconds, outcome, matched_department, lead_name, lead_company, " +
-        "lead_need, is_test, created_at",
+        "duration_seconds, outcome, matched_department, spam_detection, lead_name, " +
+        "lead_company, lead_need, is_test, created_at",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })

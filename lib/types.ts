@@ -45,7 +45,11 @@ export type CallOutcome =
   | "department_transfer"
   | "not_qualified"
   | "transfer_failed"
-  | "dropped";
+  | "dropped"
+  // Written by a spam detector, not by the agent's own judgement. Separate from
+  // "dropped" so these can be counted and reviewed -- see the 0020 migration.
+  | "spam_bot"
+  | "spam_sales";
 
 export const CALL_OUTCOMES: CallOutcome[] = [
   "qualified",
@@ -53,6 +57,8 @@ export const CALL_OUTCOMES: CallOutcome[] = [
   "not_qualified",
   "transfer_failed",
   "dropped",
+  "spam_bot",
+  "spam_sales",
 ];
 
 /** One entry in `agents.qualification_criteria`. */
@@ -190,14 +196,35 @@ export type ToolType =
   | "function"
   | "transfer_call"
   | "record_lead_info"
-  | "record_callback_number";
+  | "record_callback_number"
+  | "detect_bot_call"
+  | "detect_sales_call";
 
 export const TOOL_TYPES: ToolType[] = [
   "function",
   "transfer_call",
   "record_lead_info",
   "record_callback_number",
+  "detect_bot_call",
+  "detect_sales_call",
 ];
+
+/**
+ * The two spam detectors. Unlike every other type these are never offered to
+ * the model as callable functions -- the worker checks them against the
+ * caller's first reply itself and hangs up (see agent-worker/src/worker/spam.py).
+ * A tool the model chooses to call can be talked out of hanging up; this can't.
+ */
+export const DETECTOR_TOOL_TYPES: ToolType[] = ["detect_bot_call", "detect_sales_call"];
+
+export function isDetectorTool(toolType: ToolType): boolean {
+  return DETECTOR_TOOL_TYPES.includes(toolType);
+}
+
+/** Which LLM judges the semantic pass for a detector. */
+export type DetectorLLM = "gemini" | "deepseek";
+
+export const DETECTOR_LLMS: DetectorLLM[] = ["gemini", "deepseek"];
 
 /** Global now -- the same tool can be selected by more than one agent via
  * the `agent_tools` join table (see 0014_global_tools.sql), rather than
@@ -215,6 +242,14 @@ export type Tool = {
    * like Vapi's Transfer Call tool, rather than a shared departments directory. */
   destination_number: string | null;
   is_builtin: boolean;
+  /** Off takes the tool out of every agent at once, without unpicking
+   * `agent_tools`. Applies to all types, not just detectors. */
+  is_enabled: boolean;
+  /** Detector types only. Matched literally against the caller's first reply
+   * first (free, instant), then used as examples for the LLM pass. */
+  detector_statements: string[];
+  /** Detector types only. Null means "use the agent's own llm_provider". */
+  detector_llm: DetectorLLM | null;
   created_at: string;
   updated_at: string;
 };
@@ -237,6 +272,11 @@ export type CallLog = {
   duration_seconds: number | null;
   outcome: CallOutcome | null;
   matched_department: string | null;
+  /** Which spam detector ended the call and what triggered it. Null unless the
+   * outcome is spam_bot/spam_sales. These calls are hung up on with no
+   * explanation to the caller, so this is the only evidence a false positive
+   * leaves -- surface it wherever the outcome is shown. */
+  spam_detection: string | null;
   lead_name: string | null;
   lead_company: string | null;
   lead_need: string | null;

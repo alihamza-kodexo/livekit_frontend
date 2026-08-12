@@ -17,6 +17,15 @@ export function toolTypeMeta(tool: Tool): { icon: string; badge: string } {
       return { icon: "◔", badge: "record lead info" };
     case "record_callback_number":
       return { icon: "☏", badge: "record callback number" };
+    case "detect_bot_call":
+    case "detect_sales_call": {
+      const count = tool.detector_statements?.length ?? 0;
+      const kind = tool.tool_type === "detect_bot_call" ? "bot" : "sales";
+      return {
+        icon: "⦻",
+        badge: `detect ${kind} · ${count} statement${count === 1 ? "" : "s"}`,
+      };
+    }
     case "function":
     default: {
       const count = toolParamCount(tool);

@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { fail, guard, isE164, isIdentifier, ok, optionalStr, str, type ActionState } from "@/lib/forms";
 import { db } from "@/lib/supabase";
-import { TOOL_TYPES, type ToolType } from "@/lib/types";
+import {
+  DETECTOR_LLMS,
+  TOOL_TYPES,
+  isDetectorTool,
+  type DetectorLLM,
+  type ToolType,
+} from "@/lib/types";
 
 /**
  * Tools are a shared library now (see 0014_global_tools.sql) -- creating or
@@ -36,6 +42,8 @@ export async function saveTool(
     let webhookUrl: string | null = null;
     let destinationNumber: string | null = null;
     let parameterSchema: Record<string, unknown> = {};
+    let detectorStatements: string[] = [];
+    let detectorLlm: DetectorLLM | null = null;
 
     if (toolType === "function") {
       webhookUrl = optionalStr(form, "webhook_url");
@@ -65,6 +73,26 @@ export async function saveTool(
       if (!destinationNumber || !isE164(destinationNumber)) {
         return fail("Transfer call tools need a destination number in E.164 format, e.g. +15105550100.");
       }
+    } else if (isDetectorTool(toolType)) {
+      // One statement per line in the textarea. Blank lines are dropped rather
+      // than stored: an empty statement is contained in every utterance, so it
+      // would match — and silently hang up on — every single caller.
+      detectorStatements = str(form, "detector_statements")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (detectorStatements.length === 0) {
+        return fail(
+          "Add at least one example statement. Without any, there's nothing to match and nothing to show the classifier what spam looks like — so the detector is skipped rather than guessing.",
+        );
+      }
+
+      const llm = optionalStr(form, "detector_llm");
+      if (llm && !DETECTOR_LLMS.includes(llm as DetectorLLM)) {
+        return fail("Detector LLM must be Gemini or DeepSeek.");
+      }
+      detectorLlm = (llm as DetectorLLM | null) || null;
     }
     // record_lead_info / record_callback_number: fixed native behavior, no
     // extra columns beyond name/description.
@@ -77,6 +105,8 @@ export async function saveTool(
       parameter_schema: parameterSchema,
       webhook_url: webhookUrl,
       destination_number: destinationNumber,
+      detector_statements: detectorStatements,
+      detector_llm: detectorLlm,
       is_builtin: false,
     };
 
@@ -89,6 +119,40 @@ export async function saveTool(
     revalidatePath("/tools");
     revalidatePath("/agents/[agentId]", "layout");
     return ok(toolId ? "Tool updated." : "Tool added.");
+  });
+}
+
+/**
+ * The on/off switch in the library list.
+ *
+ * Separate from saveTool so switching a tool off is one click rather than
+ * opening the edit form and re-passing every field — and so it can be done
+ * without re-validating configuration that isn't changing. Off takes the tool
+ * out of every agent at once; `agent_tools` is left alone, so switching it back
+ * on restores exactly the agents that had it.
+ */
+export async function toggleTool(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  return guard(async () => {
+    const toolId = str(form, "tool_id");
+    if (!toolId) return fail("Missing tool id.");
+
+    // The desired state is sent explicitly rather than read-then-flipped: two
+    // admins on the page at once would otherwise toggle each other's change
+    // back, and the button already knows which way it's pointing.
+    const enable = str(form, "is_enabled") === "true";
+
+    const { error } = await db()
+      .from("tools")
+      .update({ is_enabled: enable })
+      .eq("tool_id", toolId);
+    if (error) return fail(`Could not update tool: ${error.message}`);
+
+    revalidatePath("/tools");
+    revalidatePath("/agents/[agentId]", "layout");
+    return ok(enable ? "Tool switched on." : "Tool switched off for every agent.");
   });
 }
 

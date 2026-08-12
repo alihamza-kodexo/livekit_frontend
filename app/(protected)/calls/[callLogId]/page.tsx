@@ -83,6 +83,23 @@ export default async function CallDetailPage({
           </Detail>
         </dl>
 
+        {call.spam_detection && (
+          // The caller was hung up on with no explanation, so this is the only
+          // account of why. Given its own block rather than a table cell because
+          // reading it is how a wrongly-dropped customer gets noticed -- and it
+          // names the tool, so the statement list behind it can be narrowed.
+          <div className="mt-6 border-t border-divider pt-5">
+            <dt className="mono-kicker">Ended by spam detection</dt>
+            <dd className="mt-1 text-sm">
+              {call.spam_detection}
+              <p className="mt-1.5 text-xs text-muted">
+                If this caller was legitimate, edit the statements or description on that
+                tool in <Link href="/tools" className="underline underline-offset-2">Tools</Link>.
+              </p>
+            </dd>
+          </div>
+        )}
+
         {call.lead_need && (
           <div className="mt-6 border-t border-divider pt-5">
             <dt className="mono-kicker">

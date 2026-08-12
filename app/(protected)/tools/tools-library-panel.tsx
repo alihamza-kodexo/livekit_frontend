@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
+import { toggleTool } from "@/app/(protected)/tools/actions";
 import { ToolForm } from "@/app/(protected)/tools/tool-form";
+import { ActionButton } from "@/components/form";
 import { Button, ToolTypeGlyph } from "@/components/ui";
 import { toolTypeMeta } from "@/lib/tool-display";
 import type { Tool } from "@/lib/types";
@@ -42,31 +44,64 @@ export function ToolsLibraryPanel({ tools }: { tools: Tool[] }) {
             const active = tool.tool_id === selectedId;
             const { icon, badge } = toolTypeMeta(tool);
             return (
-              <button
+              // The row is a div, not a button: the toggle is interactive and
+              // nesting a button inside a button is invalid markup that browsers
+              // resolve however they like.
+              <div
                 key={tool.tool_id}
-                type="button"
-                aria-current={active ? "true" : undefined}
-                onClick={() => setSelectedId(tool.tool_id)}
                 className={
                   active
-                    ? "flex w-full items-center gap-2.5 rounded-md border border-brand/40 bg-brand-tint px-2.5 py-2 text-left"
-                    : "flex w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left transition-colors hover:bg-canvas-alt"
+                    ? "flex items-center gap-1 rounded-md border border-brand/40 bg-brand-tint pr-1.5"
+                    : "flex items-center gap-1 rounded-md border border-transparent pr-1.5 transition-colors hover:bg-canvas-alt"
                 }
               >
-                <ToolTypeGlyph icon={icon} />
-                <span className="min-w-0">
-                  <span
-                    className={
-                      active
-                        ? "block truncate font-mono text-sm font-semibold text-brand-deep dark:text-brand"
-                        : "block truncate font-mono text-sm font-medium text-body"
-                    }
-                  >
-                    {tool.name}
+                <button
+                  type="button"
+                  aria-current={active ? "true" : undefined}
+                  onClick={() => setSelectedId(tool.tool_id)}
+                  // Dimmed as a whole when off, so "this tool isn't running"
+                  // reads at a glance from the list rather than only from the
+                  // button's label -- a tool switched off unnoticed for a week
+                  // is the failure mode worth designing against.
+                  className={`flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left ${
+                    tool.is_enabled ? "" : "opacity-45"
+                  }`}
+                >
+                  <ToolTypeGlyph icon={icon} />
+                  <span className="min-w-0">
+                    <span
+                      className={
+                        active
+                          ? "block truncate font-mono text-sm font-semibold text-brand-deep dark:text-brand"
+                          : "block truncate font-mono text-sm font-medium text-body"
+                      }
+                    >
+                      {tool.name}
+                    </span>
+                    <span className="block truncate text-xs text-faint">
+                      {tool.is_enabled ? badge : `off · ${badge}`}
+                    </span>
                   </span>
-                  <span className="block truncate text-xs text-faint">{badge}</span>
-                </span>
-              </button>
+                </button>
+
+                <ActionButton
+                  action={toggleTool}
+                  label={tool.is_enabled ? "On" : "Off"}
+                  pendingLabel="…"
+                  size="sm"
+                  variant={tool.is_enabled ? "secondary" : "ghost"}
+                  confirm={
+                    tool.is_enabled
+                      ? `Switch "${tool.name}" off? It stops working for every agent that has it selected, until you switch it back on.`
+                      : undefined
+                  }
+                  // The desired state, not a flip -- see toggleTool.
+                  hidden={{
+                    tool_id: tool.tool_id,
+                    is_enabled: tool.is_enabled ? "false" : "true",
+                  }}
+                />
+              </div>
             );
           })}
         </div>

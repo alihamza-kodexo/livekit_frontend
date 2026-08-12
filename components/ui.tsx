@@ -390,6 +390,11 @@ const OUTCOME_TONES: Record<CallOutcome, keyof typeof BADGE_TONES> = {
   not_qualified: "neutral",
   transfer_failed: "red",
   dropped: "amber",
+  // Amber rather than neutral: a spam hangup is a call the system ended on its
+  // own, and one of them being wrong means a real customer was cut off. Worth
+  // catching the eye of anyone scanning the list.
+  spam_bot: "amber",
+  spam_sales: "amber",
 };
 
 export function OutcomeBadge({ outcome }: { outcome: CallOutcome | null }) {
