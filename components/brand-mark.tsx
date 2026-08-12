@@ -24,9 +24,9 @@ export function BrandMark({ size = 32 }: { size?: number }) {
   );
 }
 
-// Both logo files are the same artwork at different sizes; this is their shared
-// aspect ratio, so a caller only ever picks a height and can't distort it.
-const WORDMARK_RATIO = 2058 / 700;
+// Both logo files are the same artwork; this is its aspect ratio, so a caller
+// only ever picks a height and can't distort it.
+const WORDMARK_RATIO = 529 / 180;
 
 /**
  * The full Kodexo Labs logo, artwork rather than set type -- so the wordmark is
@@ -48,7 +48,14 @@ export function BrandWordmark({ height = 36 }: { height?: number }) {
   // `alt` is repeated on each rather than spread in: the jsx-a11y rule reads the
   // JSX statically and can't see a prop arriving through an object spread, so
   // spreading it means a lint warning on artwork that is in fact labelled.
-  const size = { width, height, priority: true } as const;
+  // `unoptimized`: the source files are 529x180 and ~10KB, rendered at a fixed
+  // height, so there is nothing for the optimizer to win -- and it costs a
+  // round trip through /_next/image, which runs sharp in a worker pool. Two
+  // priority images on every single page is a lot of worker traffic to buy
+  // nothing, and a crash in that pool takes the page down with an error that
+  // names neither the image nor the page ("Jest worker encountered N child
+  // process exceptions"). Serving the file as-is removes that whole path.
+  const size = { width, height, priority: true, unoptimized: true } as const;
   return (
     <>
       <Image
