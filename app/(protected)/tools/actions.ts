@@ -107,12 +107,14 @@ export async function saveTool(
       destination_number: destinationNumber,
       detector_statements: detectorStatements,
       detector_llm: detectorLlm,
-      is_builtin: false,
     };
 
+    // is_builtin is set on create and never touched on update. Editing is the
+    // expected way to use the seeded detectors -- adjusting their statements
+    // shouldn't quietly reclassify them as hand-made rows.
     const { error } = toolId
       ? await db().from("tools").update(payload).eq("tool_id", toolId)
-      : await db().from("tools").insert(payload);
+      : await db().from("tools").insert({ ...payload, is_builtin: false });
 
     if (error) return fail(`Could not save tool: ${error.message}`);
 

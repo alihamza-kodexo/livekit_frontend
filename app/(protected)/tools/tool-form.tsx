@@ -7,6 +7,7 @@ import { Dropdown } from "@/components/dropdown";
 import { ActionButton, ActionForm } from "@/components/form";
 import { ToolParameterBuilder } from "@/components/tool-parameter-builder";
 import { Field, Input, StaticValue, Textarea } from "@/components/ui";
+import { DETECTOR_DEFAULTS } from "@/lib/detector-defaults";
 import { isDetectorTool, type Tool, type ToolType } from "@/lib/types";
 
 const TOOL_TYPE_LABELS: Record<ToolType, string> = {
@@ -29,6 +30,18 @@ export function ToolForm({ tool }: { tool?: Tool }) {
   // you change type after the fact, so it's fixed once created.
   const [toolType, setToolType] = useState<ToolType>(tool?.tool_type ?? "function");
   const isDetector = isDetectorTool(toolType);
+
+  // An existing row's own values always win; the defaults are only for a
+  // detector being created, so opening one of the seeded rows shows what it
+  // actually has rather than what a new one would start with.
+  const detectorDefaults = DETECTOR_DEFAULTS[toolType];
+  const statementsValue = (
+    tool?.detector_statements?.length
+      ? tool.detector_statements
+      : (detectorDefaults?.statements ?? [])
+  ).join("\n");
+  const descriptionValue =
+    tool?.description || (isDetector ? (detectorDefaults?.description ?? "") : "");
 
   return (
     <ActionForm
@@ -153,10 +166,14 @@ export function ToolForm({ tool }: { tool?: Tool }) {
           }
         >
           <Textarea
+            // Remounts when the type changes so a newly picked detector's
+            // default guidance actually appears -- an uncontrolled textarea
+            // keeps whatever it first rendered with otherwise.
+            key={`description-${toolType}`}
             id={`tool-description-${suffix}`}
             name="description"
             rows={3}
-            defaultValue={tool?.description ?? ""}
+            defaultValue={descriptionValue}
             placeholder={
               toolType === "transfer_call"
                 ? "Transfer the caller to Sales when they want pricing, a quote, or a new project."
@@ -191,18 +208,18 @@ export function ToolForm({ tool }: { tool?: Tool }) {
             label="Example statements"
             htmlFor={`tool-statements-${suffix}`}
             badge="required"
-            hint="One per line. Matched literally first (instant and free), then used as examples for the classifier. Partial lines work -- a statement matches if it appears anywhere in what the caller said."
+            hint={
+              tool
+                ? "One per line. Matched literally first (instant and free), then used as examples for the classifier. Partial lines work -- a statement matches if it appears anywhere in what the caller said."
+                : "Prefilled with a starting set -- use them as they are, or edit them. One per line, matched literally first (instant and free), then used as examples for the classifier. Partial lines work: a statement matches if it appears anywhere in what the caller said."
+            }
           >
             <Textarea
+              key={`statements-${toolType}`}
               id={`tool-statements-${suffix}`}
               name="detector_statements"
               rows={8}
-              defaultValue={(tool?.detector_statements ?? []).join("\n")}
-              placeholder={
-                toolType === "detect_bot_call"
-                  ? "press one to speak to a representative\nplease leave a message after the tone\nyour call is important to us"
-                  : "i am calling about your google business listing\nwe can help you rank higher on google\nis the owner or decision maker available"
-              }
+              defaultValue={statementsValue}
             />
           </Field>
 
