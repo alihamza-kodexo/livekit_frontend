@@ -648,11 +648,44 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
  * lib/tool-display.ts for which character means what). Brand red on a plain
  * surface -- these appear in lists of a dozen, so a filled colour block each
  * would fight everything around them. */
-export function ToolTypeGlyph({ icon }: { icon: string }) {
+/**
+ * Per-tool-type accents, so a type is recognisable by colour before the label
+ * is read -- the library list and the type picker show the same six.
+ *
+ * Built from the existing semantic tokens rather than raw colours, so both
+ * themes are covered without a second palette to keep in step. Violet is
+ * deliberately absent: the identity reserves it for the "live on another
+ * platform" number badge (see BADGE_TONES).
+ */
+const GLYPH_TONES = {
+  brand: "border-brand/35 bg-brand-tint text-brand",
+  blue: "border-info-border bg-info-bg text-info-text",
+  green: "border-success-border bg-success-bg text-success-text",
+  amber: "border-warning-border bg-warning-bg text-warning-text",
+  red: "border-error-border bg-error-bg text-error-text",
+  neutral: "border-line bg-canvas-alt text-muted",
+} as const;
+
+export type GlyphTone = keyof typeof GLYPH_TONES;
+
+export function ToolTypeGlyph({
+  icon,
+  tone = "brand",
+  size = "md",
+}: {
+  icon: string;
+  tone?: GlyphTone;
+  /** `"sm"` inside a dropdown row, where a 28px badge crowds the label. */
+  size?: "sm" | "md";
+}) {
   return (
     <span
       aria-hidden
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface font-mono text-xs font-bold text-brand"
+      className={cx(
+        "flex shrink-0 items-center justify-center rounded-md border font-mono font-bold",
+        size === "sm" ? "h-5 w-5 text-[0.625rem]" : "h-7 w-7 text-xs",
+        GLYPH_TONES[tone],
+      )}
     >
       {icon}
     </span>

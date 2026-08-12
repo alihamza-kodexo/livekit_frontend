@@ -6,8 +6,9 @@ import { saveTool, deleteTool } from "@/app/(protected)/tools/actions";
 import { Dropdown } from "@/components/dropdown";
 import { ActionButton, ActionForm } from "@/components/form";
 import { ToolParameterBuilder } from "@/components/tool-parameter-builder";
-import { Field, Input, StaticValue, Textarea } from "@/components/ui";
+import { Field, Input, StaticValue, Textarea, ToolTypeGlyph } from "@/components/ui";
 import { DETECTOR_DEFAULTS } from "@/lib/detector-defaults";
+import { TOOL_TYPE_GLYPHS } from "@/lib/tool-display";
 import { isDetectorTool, type Tool, type ToolType } from "@/lib/types";
 
 const TOOL_TYPE_LABELS: Record<ToolType, string> = {
@@ -80,7 +81,16 @@ export function ToolForm({ tool }: { tool?: Tool }) {
           hint="Fixed once created -- delete and recreate the tool if you need a different type."
         >
           {tool ? (
-            <StaticValue>{TOOL_TYPE_LABELS[toolType]}</StaticValue>
+            <StaticValue>
+              <span className="flex items-center gap-2">
+                <ToolTypeGlyph
+                  icon={TOOL_TYPE_GLYPHS[toolType].icon}
+                  tone={TOOL_TYPE_GLYPHS[toolType].tone}
+                  size="sm"
+                />
+                {TOOL_TYPE_LABELS[toolType]}
+              </span>
+            </StaticValue>
           ) : (
             <Dropdown
               id={`tool-type-${suffix}`}
@@ -91,6 +101,8 @@ export function ToolForm({ tool }: { tool?: Tool }) {
                   value,
                   label: label.split(" -- ")[0],
                   description: label.split(" -- ")[1],
+                  icon: TOOL_TYPE_GLYPHS[value].icon,
+                  iconTone: TOOL_TYPE_GLYPHS[value].tone,
                 }),
               )}
             />

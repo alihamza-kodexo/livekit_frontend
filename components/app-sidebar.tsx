@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark, BrandWordmark } from "@/components/brand-mark";
 import { ProfileMenu } from "@/components/profile-menu";
 import { NAV_COLLAPSED_COOKIE } from "@/lib/nav-preference";
 
@@ -119,11 +119,8 @@ export function AppSidebar({
         >
           <MenuIcon />
         </button>
-        <Link href="/agents" className="flex items-center gap-2">
-          <BrandMark size={26} />
-          <span className="font-heading text-sm font-semibold tracking-tight text-strong">
-            Kodexo Voice
-          </span>
+        <Link href="/agents" className="flex items-center">
+          <BrandWordmark height={30} />
         </Link>
       </header>
 
@@ -151,19 +148,33 @@ export function AppSidebar({
         <div className="flex h-16 shrink-0 items-center border-b border-divider px-3">
           <Link
             href="/agents"
-            title="Kodexo Voice"
+            title="Kodexo Labs — voice agent platform"
             onClick={() => setDrawerOpen(false)}
             className="flex min-w-0 flex-1 items-center"
           >
-            <BrandMark size={32} />
-            <span className={labelClass(collapsed, drawerOpen)}>
-              <span className="block truncate font-heading text-sm leading-tight font-semibold tracking-tight text-strong">
-                Kodexo Voice
-              </span>
-              <span className="block text-[0.6875rem] leading-tight text-faint">
-                Agent platform
-              </span>
-            </span>
+            {/* Swapped rather than animated like the nav labels below: the
+                wordmark is ~3:1, so it can't shrink into a 4rem rail legibly --
+                the square mark is what that width is sized for.
+
+                Three states, not two, because "expanded" isn't one width:
+                RAIL_WIDTH.expanded is `sm:w-16 lg:w-60`, so between those
+                breakpoints the rail is 4rem wide with `collapsed` still false.
+                The breakpoint half has to be CSS, since state can't see it. */}
+            {drawerOpen ? (
+              // The phone drawer is 16rem, so the wordmark fits there.
+              <BrandWordmark height={40} />
+            ) : collapsed ? (
+              <BrandMark size={32} />
+            ) : (
+              <>
+                <span className="lg:hidden">
+                  <BrandMark size={32} />
+                </span>
+                <span className="hidden lg:block">
+                  <BrandWordmark height={40} />
+                </span>
+              </>
+            )}
           </Link>
         </div>
 

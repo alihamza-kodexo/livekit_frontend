@@ -621,7 +621,7 @@ export function AgentToolsPanel({
       )}
       {allTools.map((tool) => {
         const attached = selectedToolIds.has(tool.tool_id);
-        const { icon, badge } = toolTypeMeta(tool);
+        const { icon, tone, badge } = toolTypeMeta(tool);
         return (
           <div
             key={tool.tool_id}
@@ -631,7 +631,7 @@ export function AgentToolsPanel({
                 : "flex flex-wrap items-center gap-3 rounded-md border border-line bg-canvas-alt p-3"
             }
           >
-            <ToolTypeGlyph icon={icon} />
+            <ToolTypeGlyph icon={icon} tone={tone} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate font-mono text-sm font-medium text-strong">

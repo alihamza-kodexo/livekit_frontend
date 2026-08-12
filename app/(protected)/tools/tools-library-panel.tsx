@@ -42,7 +42,7 @@ export function ToolsLibraryPanel({ tools }: { tools: Tool[] }) {
           )}
           {tools.map((tool) => {
             const active = tool.tool_id === selectedId;
-            const { icon, badge } = toolTypeMeta(tool);
+            const { icon, tone, badge } = toolTypeMeta(tool);
             return (
               // The row is a div, not a button: the toggle is interactive and
               // nesting a button inside a button is invalid markup that browsers
@@ -67,7 +67,7 @@ export function ToolsLibraryPanel({ tools }: { tools: Tool[] }) {
                     tool.is_enabled ? "" : "opacity-45"
                   }`}
                 >
-                  <ToolTypeGlyph icon={icon} />
+                  <ToolTypeGlyph icon={icon} tone={tone} />
                   <span className="min-w-0">
                     <span
                       className={

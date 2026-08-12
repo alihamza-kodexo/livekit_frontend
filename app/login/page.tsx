@@ -1,5 +1,5 @@
 import { login } from "@/app/login/actions";
-import { BrandMark } from "@/components/brand-mark";
+import { BrandWordmark } from "@/components/brand-mark";
 import { ActionForm } from "@/components/form";
 import { Field, Input } from "@/components/ui";
 
@@ -19,11 +19,10 @@ export default async function LoginPage({
       {/* Form side */}
       <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-10 sm:py-14">
         <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center justify-center gap-3">
-            <BrandMark size={36} />
-            <span className="font-heading text-lg leading-none font-semibold tracking-tight text-strong">
-              Kodexo <span className="font-normal text-muted">Voice</span>
-            </span>
+          <div className="mb-8 flex items-center justify-center">
+            {/* The logo carries the wordmark itself, so the mark and the set
+                type that used to sit beside it would both be duplicates. */}
+            <BrandWordmark height={60} />
           </div>
 
           <div className="rounded-xl border border-line bg-surface p-5 shadow-lg sm:p-7">

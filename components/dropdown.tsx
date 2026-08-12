@@ -2,12 +2,19 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
+import { ToolTypeGlyph, type GlyphTone } from "@/components/ui";
+
 export type DropdownOption = {
   value: string;
   label: string;
   /** Second line under the label -- the trade-off, the sample, the caveat. */
   description?: string;
   disabled?: boolean;
+  /** A glyph shown before the label, in the menu and on the closed trigger.
+   * Optional so every other dropdown in the app is unaffected. */
+  icon?: string;
+  /** Accent for `icon`. Ignored without one. */
+  iconTone?: GlyphTone;
 };
 
 export type DropdownTone = "default" | "neutral" | "green" | "amber" | "red";
@@ -200,8 +207,16 @@ export function Dropdown({
           open && "border-brand",
         )}
       >
-        <span className={cx("min-w-0 truncate", !selected && "text-faint")}>
-          {selected?.label ?? placeholder}
+        <span className="flex min-w-0 items-center gap-2">
+          {/* On the trigger too, not just in the menu -- otherwise the mark
+              disappears the moment a choice is made, which is when it's most
+              useful as confirmation of what's selected. */}
+          {selected?.icon && (
+            <ToolTypeGlyph icon={selected.icon} tone={selected.iconTone} size="sm" />
+          )}
+          <span className={cx("min-w-0 truncate", !selected && "text-faint")}>
+            {selected?.label ?? placeholder}
+          </span>
         </span>
         <ChevronIcon open={open} />
       </button>
@@ -248,6 +263,11 @@ export function Dropdown({
               )}
             >
               <CheckIcon visible={isSelected} />
+              {option.icon && (
+                // Nudged down so it lines up with the label's cap height rather
+                // than the row's top edge, since rows can be two lines tall.
+                <ToolTypeGlyph icon={option.icon} tone={option.iconTone} size="sm" />
+              )}
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{option.label}</span>
                 {option.description && (
