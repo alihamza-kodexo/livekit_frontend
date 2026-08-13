@@ -48,14 +48,7 @@ export function BrandWordmark({ height = 36 }: { height?: number }) {
   // `alt` is repeated on each rather than spread in: the jsx-a11y rule reads the
   // JSX statically and can't see a prop arriving through an object spread, so
   // spreading it means a lint warning on artwork that is in fact labelled.
-  // `unoptimized`: the source files are 529x180 and ~10KB, rendered at a fixed
-  // height, so there is nothing for the optimizer to win -- and it costs a
-  // round trip through /_next/image, which runs sharp in a worker pool. Two
-  // priority images on every single page is a lot of worker traffic to buy
-  // nothing, and a crash in that pool takes the page down with an error that
-  // names neither the image nor the page ("Jest worker encountered N child
-  // process exceptions"). Serving the file as-is removes that whole path.
-  const size = { width, height, priority: true, unoptimized: true } as const;
+  const size = { width, height, priority: true } as const;
   return (
     <>
       <Image
