@@ -18,6 +18,7 @@ const TOOL_TYPE_LABELS: Record<ToolType, string> = {
   record_callback_number: "Record callback number -- captures a number to call back",
   detect_bot_call: "Detect bot call -- hangs up on answering machines and robocalls",
   detect_sales_call: "Detect sales call -- hangs up on cold pitches to us",
+  end_call: "End call -- hangs up, on conditions you describe",
 };
 
 /** Detail pane for one tool in the global library -- either an existing row
@@ -196,11 +197,19 @@ export function ToolForm({ tool }: { tool?: Tool }) {
           />
         </Field>
 
-        {(toolType === "record_lead_info" || toolType === "record_callback_number") && (
+        {(toolType === "record_lead_info" ||
+          toolType === "record_callback_number" ||
+          toolType === "end_call") && (
           <p className="rounded-md border border-info-border bg-info-bg px-3 py-2 text-xs leading-relaxed text-info-text">
             {toolType === "record_lead_info"
               ? "Fixed behavior: captures the caller's name, company, need, and qualification answers into this call's log -- not configurable beyond name and description."
-              : "Fixed behavior: captures a callback number into this call's log, and into the transfer-failed alert -- not configurable beyond name and description."}
+              : toolType === "record_callback_number"
+                ? "Fixed behavior: captures a callback number into this call's log, and into the transfer-failed alert -- not configurable beyond name and description."
+                : // The description is the whole point of this type, so say what it
+                  // does and doesn't control. The mechanics stay fixed because an
+                  // admin overriding "speak your closing line first" produces calls
+                  // cut off mid-word.
+                  "Every agent can already hang up without this tool. Attach one to describe the conditions in your own words above -- the model reads a tool description on every turn, which carries more weight than the same sentence in the agent prompt. Your text is added to the built-in instructions (speak the closing line first, then hang up), not instead of them. Attaching this replaces the default end-call tool rather than adding a second one."}
           </p>
         )}
       </div>

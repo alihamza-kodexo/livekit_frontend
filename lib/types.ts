@@ -198,7 +198,16 @@ export type ToolType =
   | "record_lead_info"
   | "record_callback_number"
   | "detect_bot_call"
-  | "detect_sales_call";
+  | "detect_sales_call"
+  /**
+   * Hangs up. The only type with a built-in fallback: an agent with no end_call
+   * tool attached still gets the default one, because an agent that cannot hang
+   * up doesn't end its calls — it holds the line until LiveKit's room timeout
+   * expires while telephony bills every minute. Attaching a row *replaces* the
+   * default rather than enabling it, and the description you write is appended
+   * to the built-in mechanics rather than overwriting them.
+   */
+  | "end_call";
 
 export const TOOL_TYPES: ToolType[] = [
   "function",
@@ -207,6 +216,7 @@ export const TOOL_TYPES: ToolType[] = [
   "record_callback_number",
   "detect_bot_call",
   "detect_sales_call",
+  "end_call",
 ];
 
 /**
@@ -325,6 +335,18 @@ export type CallLog = {
    * never ran (short transcript, timeout, provider outage). Different facts. */
   user_queries: string[] | null;
   priority: CallPriority | null;
+  /**
+   * The caller's name as the analysis model heard it. Deliberately separate from
+   * `lead_name`, which the record_lead_info tool records during the call and
+   * which is authoritative — this is an inference from a transcript that may
+   * itself have misheard the name. Show which is which rather than collapsing
+   * them; a guess must not be indistinguishable from a recorded fact.
+   */
+  caller_name: string | null;
+  /** Which model produced caller_name / call_summary / user_queries / priority,
+   * e.g. "deepseek-v4-flash". Stored per row so the UI can attribute those
+   * fields honestly even after ANALYSIS_LLM is repointed. */
+  analysis_model: string | null;
   created_at: string;
 };
 

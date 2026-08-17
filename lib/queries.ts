@@ -93,7 +93,12 @@ export type CallLogFilters = {
  * where there's room to show them. */
 export type CallLogListItem = Omit<
   CallLog,
-  "transcript" | "cost_breakdown" | "call_summary" | "user_queries"
+  | "transcript"
+  | "cost_breakdown"
+  | "call_summary"
+  | "user_queries"
+  | "caller_name"
+  | "analysis_model"
 >;
 
 /** One page of call logs, plus how many rows match the filters in total. */

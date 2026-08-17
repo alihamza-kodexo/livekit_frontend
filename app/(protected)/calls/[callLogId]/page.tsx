@@ -136,9 +136,25 @@ export default async function CallDetailPage({
         (call.user_queries && call.user_queries.length > 0)) && (
         <Card
           title="Call analysis"
-          description="Written after the call ended, never during it. Status, transfer and callback are observed from what the session actually did; the summary, caller requests and priority are judged from the transcript by the analysis model."
+          description="Written after the call ended, never during it. Status, transfer and callback are observed from what the session actually did. Caller name, summary, requests and priority are inferred from the transcript by the model named on the badge — the caller name in particular is a guess, where LEAD NAME above is captured by a tool during the call."
         >
           <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <Detail label="Caller name">
+              {call.caller_name ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  {call.caller_name}
+                  {/* Attributed rather than presented as fact. This name was
+                      inferred from a transcript, unlike LEAD NAME in Summary
+                      which the record_lead_info tool captured during the call.
+                      Anyone acting on it should know which they're looking at. */}
+                  <Badge tone="blue">
+                    {call.analysis_model ?? "analysis"}
+                  </Badge>
+                </span>
+              ) : (
+                <span className="text-faint">not stated</span>
+              )}
+            </Detail>
             <Detail label="Status">
               <CallStatusBadge status={call.call_status} />
             </Detail>

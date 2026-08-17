@@ -29,6 +29,7 @@ export const TOOL_TYPE_GLYPHS: Record<ToolType, { icon: string; tone: GlyphTone 
   record_callback_number: { icon: "☏", tone: "neutral" },
   detect_bot_call: { icon: "☰", tone: "amber" },
   detect_sales_call: { icon: "⊘", tone: "red" },
+  end_call: { icon: "⏻", tone: "neutral" },
 };
 
 /** Icon, accent and one-line badge text per tool, shared by the agent's Tools tab
@@ -43,6 +44,8 @@ export function toolTypeMeta(tool: Tool): { icon: string; tone: GlyphTone; badge
       return { ...glyph, badge: "record lead info" };
     case "record_callback_number":
       return { ...glyph, badge: "record callback number" };
+    case "end_call":
+      return { ...glyph, badge: "end call" };
     case "detect_bot_call":
     case "detect_sales_call": {
       const count = tool.detector_statements?.length ?? 0;
