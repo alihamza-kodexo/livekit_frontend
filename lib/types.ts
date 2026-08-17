@@ -282,7 +282,73 @@ export type CallLog = {
   lead_need: string | null;
   /** True for a dashboard "Test agent" browser session -- no phone number or Twilio call involved. */
   is_test: boolean;
+  /**
+   * What the call cost, split by the thing that charges for it, frozen at the
+   * rates in effect when it ended (see agent-worker/src/worker/pricing.py).
+   * Null on every row written before cost tracking existed -- those calls have
+   * no usage counters and can never be priced, which is why this is nullable
+   * rather than 0.
+   *
+   * Three of the four are computed from metered usage. `cost_telephony_usd` is
+   * not: Twilio bills the account directly and the worker holds no Twilio
+   * credentials, so it is duration x a configured rate. Say "estimated"
+   * wherever it's shown.
+   */
+  cost_stt_usd: number | null;
+  cost_llm_usd: number | null;
+  cost_tts_usd: number | null;
+  cost_telephony_usd: number | null;
+  cost_total_usd: number | null;
+  cost_breakdown: CostBreakdown | null;
+
+  /* --- Post-call analysis (agent-worker/src/worker/analysis.py) ------------
+   *
+   * `call_status` and `priority` sit alongside `outcome`, not instead of it.
+   * They answer different questions: outcome is what the call was *for*,
+   * call_status is whether it *worked*, priority is how much to care. A
+   * robocall hung up on deliberately is spam_bot / success / Low at once.
+   *
+   * Only the last three came from a model. The rest are observations the
+   * worker made during the call, which is why there is no `caller_phone` or
+   * `caller_name` here -- `caller_number` and `lead_name` already hold those
+   * exact facts and a second copy would be free to drift. */
+
+  /** Which of the agent's numbers was dialled. Null for browser test calls. */
+  called_number: string | null;
+  call_status: "success" | "failed" | "incomplete" | null;
+  transfer_attempted: boolean | null;
+  callback_needed: boolean | null;
+  has_error: boolean | null;
+  error_message: string | null;
+  call_summary: string | null;
+  /** Empty array = the analysis ran and found nothing substantive. Null = it
+   * never ran (short transcript, timeout, provider outage). Different facts. */
+  user_queries: string[] | null;
+  priority: CallPriority | null;
   created_at: string;
+};
+
+export const CALL_PRIORITIES = ["High", "Medium", "Low"] as const;
+export type CallPriority = (typeof CALL_PRIORITIES)[number];
+
+/** One priced row of a call's cost, as written by pricing.py's `LineItem`. */
+export type CostLine = {
+  component: "stt" | "llm" | "tts" | "telephony";
+  provider: string;
+  model: string;
+  quantity: number;
+  unit: string;
+  /** Null when no rate was configured for this model, in which case its cost is
+   * missing from the call total rather than wrong -- shown as "unpriced". */
+  rate_usd: number | null;
+  cost_usd: number;
+  unpriced?: boolean;
+};
+
+export type CostBreakdown = {
+  lines: CostLine[];
+  priced_at_rates: string;
+  telephony_is_estimated: boolean;
 };
 
 /** The login allowlist -- see supabase/migrations/0003_allowed_users.sql. */

@@ -88,8 +88,13 @@ export type CallLogFilters = {
   to?: string;
 };
 
-/** Call log list rows omit `transcript` — it's fetched only on the detail view. */
-export type CallLogListItem = Omit<CallLog, "transcript">;
+/** Call log list rows omit the long-form fields — transcript, the per-line cost
+ * breakdown, and the analysis prose. All are fetched only on the detail view,
+ * where there's room to show them. */
+export type CallLogListItem = Omit<
+  CallLog,
+  "transcript" | "cost_breakdown" | "call_summary" | "user_queries"
+>;
 
 /** One page of call logs, plus how many rows match the filters in total. */
 export type CallLogPage = {
@@ -117,7 +122,16 @@ export async function listCallLogs(
     .select(
       "call_log_id, call_sid, room_id, agent_id, caller_number, recording_url, " +
         "duration_seconds, outcome, matched_department, spam_detection, lead_name, " +
-        "lead_company, lead_need, is_test, created_at",
+        "lead_company, lead_need, is_test, created_at, " +
+        // The four component costs but not cost_breakdown: the list shows a
+        // single figure, and the per-line audit trail is only ever read on the
+        // detail page. Same reasoning as leaving transcript out.
+        "cost_stt_usd, cost_llm_usd, cost_tts_usd, cost_telephony_usd, cost_total_usd, " +
+        // Analysis fields the list actually shows or filters on. call_summary
+        // and user_queries are left out for the same reason as transcript --
+        // free-form text nobody reads at 50 rows a page.
+        "called_number, call_status, transfer_attempted, callback_needed, " +
+        "has_error, error_message, priority",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })

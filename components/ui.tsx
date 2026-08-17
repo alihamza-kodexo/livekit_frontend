@@ -15,7 +15,7 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
-import type { AgentStatus, CallOutcome } from "@/lib/types";
+import type { AgentStatus, CallOutcome, CallPriority } from "@/lib/types";
 
 function cx(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
@@ -316,6 +316,26 @@ export function Duration({ seconds }: { seconds: number | null }) {
   );
 }
 
+/**
+ * A USD amount, shown to four decimal places rather than two.
+ *
+ * These are fractions of a cent: a three-minute call costs around $0.07 and a
+ * single component of it can be $0.0039. Rounding to cents would print $0.00
+ * for most of what this dashboard is trying to show, so the extra digits are
+ * the whole point rather than false precision.
+ *
+ * Null means the call predates cost tracking and can never be priced — an
+ * em-dash, not $0.00, because the two mean very different things.
+ */
+export function Money({ usd }: { usd: number | null }) {
+  if (usd === null || usd === undefined) return <Empty />;
+  return (
+    <span className="font-mono text-[0.8125rem] tabular-nums">
+      {`$${usd.toFixed(4)}`}
+    </span>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Badges                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -402,6 +422,36 @@ export function OutcomeBadge({ outcome }: { outcome: CallOutcome | null }) {
   return (
     <Badge tone={OUTCOME_TONES[outcome]}>{outcome.replace(/_/g, " ")}</Badge>
   );
+}
+
+const PRIORITY_TONES: Record<CallPriority, keyof typeof BADGE_TONES> = {
+  High: "red",
+  Medium: "amber",
+  Low: "neutral",
+};
+
+/** How much attention a call deserves, as judged by the post-call analysis.
+ * Separate from OutcomeBadge on purpose — a spam call is outcome "spam bot" and
+ * priority "Low", and collapsing the two would lose one of them. */
+export function PriorityBadge({ priority }: { priority: CallPriority | null }) {
+  if (!priority) return <Empty />;
+  return <Badge tone={PRIORITY_TONES[priority]}>{priority}</Badge>;
+}
+
+const CALL_STATUS_TONES = {
+  success: "green",
+  failed: "red",
+  incomplete: "amber",
+} as const;
+
+/** Whether the call worked, as distinct from what it was for. */
+export function CallStatusBadge({
+  status,
+}: {
+  status: "success" | "failed" | "incomplete" | null;
+}) {
+  if (!status) return <Empty />;
+  return <Badge tone={CALL_STATUS_TONES[status]}>{status}</Badge>;
 }
 
 /* -------------------------------------------------------------------------- */

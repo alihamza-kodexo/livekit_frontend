@@ -8,10 +8,12 @@ import {
   ConfigNotice,
   Duration,
   EmptyState,
+  Money,
   Mono,
   OutcomeBadge,
   PageBody,
   PageHeader,
+  PriorityBadge,
   Table,
   Td,
   Th,
@@ -125,8 +127,10 @@ export default async function CallsPage({
                 <Th>Caller</Th>
                 <Th>Agent</Th>
                 <Th>Outcome</Th>
+                <Th>Priority</Th>
                 <Th>Lead</Th>
                 <Th className="text-right">Duration</Th>
+                <Th className="text-right">Cost</Th>
                 <Th />
               </tr>
             </thead>
@@ -164,6 +168,15 @@ export default async function CallsPage({
                         → {call.matched_department}
                       </div>
                     )}
+                    {call.has_error && (
+                      // The session broke on this call. Surfaced in the list
+                      // because a failed call that still shows a normal outcome
+                      // is otherwise indistinguishable from one that worked.
+                      <div className="text-xs text-error-text">session error</div>
+                    )}
+                  </Td>
+                  <Td>
+                    <PriorityBadge priority={call.priority} />
                   </Td>
                   <Td>
                     {call.lead_name || call.lead_company ? (
@@ -179,6 +192,9 @@ export default async function CallsPage({
                   </Td>
                   <Td className="text-right text-muted">
                     <Duration seconds={call.duration_seconds} />
+                  </Td>
+                  <Td className="text-right text-muted">
+                    <Money usd={call.cost_total_usd} />
                   </Td>
                   <Td>
                     <Link

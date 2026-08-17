@@ -4,15 +4,28 @@ import { notFound } from "next/navigation";
 import {
   Badge,
   ButtonLink,
+  CallStatusBadge,
   Card,
   Duration,
+  Money,
   Mono,
   OutcomeBadge,
   PageBody,
   PageHeader,
+  PriorityBadge,
+  Table,
+  Td,
+  Th,
   Timestamp,
 } from "@/components/ui";
 import { getAgent, getCallLog } from "@/lib/queries";
+
+const COMPONENT_LABELS: Record<string, string> = {
+  stt: "Speech-to-text",
+  llm: "Conversation engine",
+  tts: "Text-to-speech",
+  telephony: "Telephony",
+};
 
 export default async function CallDetailPage({
   params,
@@ -58,6 +71,9 @@ export default async function CallDetailPage({
           <Detail label="Outcome">
             <OutcomeBadge outcome={call.outcome} />
           </Detail>
+          <Detail label="Cost">
+            <Money usd={call.cost_total_usd} />
+          </Detail>
           <Detail label="Agent">
             {agent ? (
               <Link
@@ -75,6 +91,9 @@ export default async function CallDetailPage({
           </Detail>
           <Detail label="Lead name">{call.lead_name ?? "—"}</Detail>
           <Detail label="Company">{call.lead_company ?? "—"}</Detail>
+          <Detail label="Number dialled">
+            {call.called_number ? <Mono>{call.called_number}</Mono> : "—"}
+          </Detail>
           <Detail label="Twilio call SID">
             {call.call_sid ? <Mono>{call.call_sid}</Mono> : "—"}
           </Detail>
@@ -109,6 +128,142 @@ export default async function CallDetailPage({
           </div>
         )}
       </Card>
+
+      {(call.call_status ||
+        call.priority ||
+        call.call_summary ||
+        call.has_error ||
+        (call.user_queries && call.user_queries.length > 0)) && (
+        <Card
+          title="Call analysis"
+          description="Written after the call ended, never during it. Status, transfer and callback are observed from what the session actually did; the summary, caller requests and priority are judged from the transcript by the analysis model."
+        >
+          <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <Detail label="Status">
+              <CallStatusBadge status={call.call_status} />
+            </Detail>
+            <Detail label="Priority">
+              <PriorityBadge priority={call.priority} />
+            </Detail>
+            <Detail label="Transfer attempted">
+              {call.transfer_attempted === null
+                ? "—"
+                : call.transfer_attempted
+                  ? "Yes"
+                  : "No"}
+            </Detail>
+            <Detail label="Callback needed">
+              {call.callback_needed === null
+                ? "—"
+                : call.callback_needed
+                  ? "Yes"
+                  : "No"}
+            </Detail>
+          </dl>
+
+          {call.has_error && (
+            // The session broke mid-call. Until this was recorded it lived only
+            // in the worker's stdout, on another machine — so a call that went
+            // wrong looked identical to one that went fine.
+            <div className="mt-6 border-t border-divider pt-5">
+              <dt className="mono-kicker">Session error</dt>
+              <dd className="mt-1 text-sm">
+                {call.error_message ?? "An error occurred but no detail was recorded."}
+              </dd>
+            </div>
+          )}
+
+          {call.call_summary && (
+            <div className="mt-6 border-t border-divider pt-5">
+              <dt className="mono-kicker">Summary</dt>
+              <dd className="mt-1 text-sm leading-relaxed">{call.call_summary}</dd>
+            </div>
+          )}
+
+          {call.user_queries && call.user_queries.length > 0 && (
+            <div className="mt-6 border-t border-divider pt-5">
+              <dt className="mono-kicker">What the caller asked for</dt>
+              <dd className="mt-1">
+                <ul className="list-disc space-y-1 pl-5 text-sm">
+                  {call.user_queries.map((query, i) => (
+                    <li key={i}>{query}</li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {call.cost_breakdown && call.cost_breakdown.lines.length > 0 && (
+        <Card
+          title="Cost breakdown"
+          description="What each platform charged for this call, at the rates in effect when it ended. Stored per call rather than recomputed, so a later price change can't rewrite history."
+        >
+          <Table>
+            <thead>
+              <tr>
+                <Th>Platform</Th>
+                <Th>Model</Th>
+                <Th className="text-right">Used</Th>
+                <Th className="text-right">Rate</Th>
+                <Th className="text-right">Cost</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {call.cost_breakdown.lines.map((line, i) => (
+                <tr key={`${line.component}-${line.model}-${i}`}>
+                  <Td>
+                    {COMPONENT_LABELS[line.component] ?? line.component}
+                    {line.component === "telephony" && (
+                      <div className="text-xs text-muted">estimated</div>
+                    )}
+                  </Td>
+                  <Td>
+                    <Mono>{line.model}</Mono>
+                    <div className="text-xs text-muted">{line.provider}</div>
+                  </Td>
+                  <Td className="text-right text-muted whitespace-nowrap">
+                    {line.quantity.toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}
+                    <div className="text-xs text-faint">{line.unit}</div>
+                  </Td>
+                  <Td className="text-right text-muted whitespace-nowrap">
+                    {line.rate_usd === null ? (
+                      <span className="text-faint">no rate set</span>
+                    ) : (
+                      `$${line.rate_usd}`
+                    )}
+                  </Td>
+                  <Td className="text-right">
+                    <Money usd={line.cost_usd} />
+                  </Td>
+                </tr>
+              ))}
+              <tr>
+                <Td className="font-medium">Total</Td>
+                <Td />
+                <Td />
+                <Td />
+                <Td className="text-right font-medium">
+                  <Money usd={call.cost_total_usd} />
+                </Td>
+              </tr>
+            </tbody>
+          </Table>
+
+          <p className="mt-4 text-xs text-muted">
+            Speech-to-text, the conversation engine and text-to-speech are priced
+            from metered usage — token counts come from the model provider&apos;s
+            own response. Telephony is not metered here: Twilio bills the account
+            directly and the worker has no access to that figure, so it is
+            duration multiplied by a configured rate. Text-to-speech runs slightly
+            high on calls where the agent was interrupted mid-sentence, since the
+            character count includes text that was never sent to the provider.
+          </p>
+        </Card>
+      )}
 
       {call.recording_url && (
         <Card title="Recording">
