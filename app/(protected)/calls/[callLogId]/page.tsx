@@ -19,6 +19,7 @@ import {
   Timestamp,
 } from "@/components/ui";
 import { getAgent, getCallLog } from "@/lib/queries";
+import { ENDED_BY_LABELS } from "@/lib/types";
 
 const COMPONENT_LABELS: Record<string, string> = {
   stt: "Speech-to-text",
@@ -26,6 +27,31 @@ const COMPONENT_LABELS: Record<string, string> = {
   tts: "Text-to-speech",
   telephony: "Telephony",
 };
+
+/** The slugs the worker writes today, in the words a person would use.
+ * Deliberately a lookup with a fallback rather than an exhaustive map: the
+ * worker is free to add reasons (`shutdown: …` carries arbitrary text), and an
+ * unknown slug should still be readable rather than rendering as blank. */
+const END_REASON_LABELS: Record<string, string> = {
+  end_call_tool: "the agent ended the call",
+  transferred: "the call was transferred",
+  caller_hung_up: "the caller hung up",
+  // The disconnect arrived without a reason attached, so this is our inference,
+  // not LiveKit's word. Says so rather than reading as a confirmed hangup.
+  caller_hung_up_unconfirmed: "the caller left — reason not reported",
+  spam_filter: "the spam filter dropped it",
+  sip_trunk_failure: "the SIP trunk failed",
+  connection_timeout: "the connection timed out",
+  media_failure: "the audio connection failed",
+  user_unavailable: "the caller did not answer",
+  user_rejected: "the caller rejected the call",
+  signal_close: "the connection closed",
+  server_shutdown: "the media server shut down",
+};
+
+function endReasonLabel(reason: string): string {
+  return END_REASON_LABELS[reason] ?? reason.replaceAll("_", " ");
+}
 
 export default async function CallDetailPage({
   params,
@@ -133,10 +159,11 @@ export default async function CallDetailPage({
         call.priority ||
         call.call_summary ||
         call.has_error ||
+        call.ended_by ||
         (call.user_queries && call.user_queries.length > 0)) && (
         <Card
           title="Call analysis"
-          description="Written after the call ended, never during it. Status, transfer and callback are observed from what the session actually did. Caller name, summary, requests and priority are inferred from the transcript by the model named on the badge — the caller name in particular is a guess, where LEAD NAME above is captured by a tool during the call."
+          description="Written after the call ended, never during it. Status, who ended the call, transfer and callback are observed from what the session actually did. Caller name, summary, requests and priority are inferred from the transcript by the model named on the badge — the caller name in particular is a guess, where LEAD NAME above is captured by a tool during the call."
         >
           <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <Detail label="Caller name">
@@ -157,6 +184,22 @@ export default async function CallDetailPage({
             </Detail>
             <Detail label="Status">
               <CallStatusBadge status={call.call_status} />
+            </Detail>
+            <Detail label="Ended by">
+              {call.ended_by ? (
+                <span className="flex flex-col gap-0.5">
+                  {ENDED_BY_LABELS[call.ended_by]}
+                  {call.end_reason && (
+                    <span className="text-xs text-faint">
+                      {endReasonLabel(call.end_reason)}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                // Not "unknown" — that is a value the worker can actually
+                // record. This is a call from before any of it was tracked.
+                <span className="text-faint">not recorded</span>
+              )}
             </Detail>
             <Detail label="Priority">
               <PriorityBadge priority={call.priority} />

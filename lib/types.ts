@@ -330,6 +330,27 @@ export type CallLog = {
   callback_needed: boolean | null;
   has_error: boolean | null;
   error_message: string | null;
+  /**
+   * Who ended the call, and why. Observed during the call by whichever code
+   * path ended it — never inferred afterwards from the transcript, and never
+   * from `outcome`. See agent-worker's `CallState.claim_end` and migration 0025.
+   *
+   * `ended_by` answers a question none of the fields above do. A caller who hung
+   * up mid-sentence and an agent that said goodbye both used to land as
+   * `call_status: "incomplete"` with a null outcome — the same row for opposite
+   * events. Note `"telephony"` is the line failing, which is emphatically not a
+   * caller hangup and must not be shown as one.
+   *
+   * `end_reason` is a short slug (`end_call_tool`, `transferred`,
+   * `caller_hung_up`, `spam_filter`, `sip_trunk_failure`, `worker_shutdown`,
+   * `shutdown: …`). Intentionally open-ended, so treat an unrecognised value as
+   * displayable text rather than assuming the set below is exhaustive.
+   *
+   * Both null on calls recorded before this existed, and on any call that ended
+   * in a way nothing claimed — which is "we don't know", not any of the actors.
+   */
+  ended_by: EndedBy | null;
+  end_reason: string | null;
   call_summary: string | null;
   /** Empty array = the analysis ran and found nothing substantive. Null = it
    * never ran (short transcript, timeout, provider outage). Different facts. */
@@ -352,6 +373,28 @@ export type CallLog = {
 
 export const CALL_PRIORITIES = ["High", "Medium", "Low"] as const;
 export type CallPriority = (typeof CALL_PRIORITIES)[number];
+
+/** Who ended a call. Mirrors `EndedBy` in agent-worker/src/worker/models.py and
+ * the check constraint in migration 0025 — keep all three in step. */
+export const ENDED_BY = [
+  "agent",
+  "caller",
+  "system",
+  "telephony",
+  "unknown",
+] as const;
+export type EndedBy = (typeof ENDED_BY)[number];
+
+/** How each actor reads to a person. "System" and "telephony" are separated on
+ * purpose: one is our software ending the call, the other is the phone network
+ * dropping it, and only the second is anybody's fault outside this codebase. */
+export const ENDED_BY_LABELS: Record<EndedBy, string> = {
+  agent: "Agent",
+  caller: "Caller",
+  system: "System",
+  telephony: "Line dropped",
+  unknown: "Unknown",
+};
 
 /** One priced row of a call's cost, as written by pricing.py's `LineItem`. */
 export type CostLine = {
