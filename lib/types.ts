@@ -180,6 +180,20 @@ export type Agent = {
    * the posted payload's recording_url is always null too -- see
    * agent-worker's notify.send_end_call_webhook. */
   end_call_webhook_url: string | null;
+  /**
+   * Whether this agent posts to Slack at all. Off by default, including for
+   * agents created before the column existed — see migration 0026.
+   *
+   * When on, the agent posts a lead alert for calls where lead details were
+   * captured, plus the urgent alert when a transfer fails. It never posts a
+   * summary of every call; that behaviour was removed, because a channel that
+   * carries every robocall and four-second hangup is one nobody reads.
+   *
+   * Requires SLACK_WEBHOOK_URL on the worker too. This switch can't enable
+   * notifications a deployment has no webhook for, so "on" here plus silence
+   * in Slack means the webhook is missing, not that the toggle failed.
+   */
+  slack_notifications_enabled: boolean;
   created_at: string;
   updated_at: string;
 };

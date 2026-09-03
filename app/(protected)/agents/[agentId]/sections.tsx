@@ -16,6 +16,7 @@ import { GEMINI_DEFAULT_VOICE, GEMINI_VOICES } from "@/lib/gemini-voices";
 import { toolTypeMeta } from "@/lib/tool-display";
 import {
   Button,
+  Checkbox,
   Chevron,
   Field,
   FieldSet,
@@ -203,6 +204,21 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
             defaultValue={agent.end_call_webhook_url ?? ""}
             placeholder="https://n8n.example.com/webhook/call-ended"
           />
+        </Field>
+        <Field
+          label="Slack notifications"
+          htmlFor="slack-notifications-enabled"
+          badge="off by default"
+          hint="Posts to Slack when a call captures lead details — a name, company or what they need — and when a transfer fails and someone owes the caller a callback. Nothing else: spam, wrong numbers and calls that dropped early stay in the call log without becoming a message. Needs SLACK_WEBHOOK_URL set on the worker as well; if that's missing, nothing arrives even with this on."
+        >
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              id="slack-notifications-enabled"
+              name="slack_notifications_enabled"
+              defaultChecked={agent.slack_notifications_enabled}
+            />
+            Post this agent&apos;s leads to Slack
+          </label>
         </Field>
       </FieldSet>
     </ActionForm>

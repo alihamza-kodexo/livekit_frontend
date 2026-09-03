@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  bool,
   fail,
   guard,
   isIdentifier,
@@ -197,6 +198,7 @@ export async function updateAgentCore(
         qualification_criteria: criteria,
         end_call_instructions: optionalStr(form, "end_call_instructions"),
         end_call_webhook_url: endCallWebhookUrl,
+        slack_notifications_enabled: bool(form, "slack_notifications_enabled"),
       })
       .eq("agent_id", agentId);
 
