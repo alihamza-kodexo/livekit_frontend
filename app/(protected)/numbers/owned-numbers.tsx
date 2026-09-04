@@ -132,22 +132,32 @@ export function OwnedNumbers({
         </p>
       ) : (
         <>
+          {/* "1 of 38 numbers" is confusing when nothing is filtering it --
+              it reads as a pager. Only mention the total when a search is
+              actually narrowing the list. */}
           <p className="text-xs text-muted">
-            {filtered.length} of {numbers.length} number{numbers.length === 1 ? "" : "s"}
+            {search.trim()
+              ? `${filtered.length} of ${numbers.length} numbers match`
+              : `${numbers.length} number${numbers.length === 1 ? "" : "s"}`}
           </p>
           <Table>
             <thead>
               <tr>
-                <Th>Number</Th>
-                <Th>Routing</Th>
+                {/* Widths rather than letting the browser guess. "Answered by"
+                    holds the only flexible content (a dropdown plus two
+                    possible status lines), so it takes the slack and the other
+                    three stay at their natural size instead of every column
+                    being squeezed equally. */}
+                <Th className="w-[1%]">Number</Th>
+                <Th className="w-[1%]">Routing</Th>
                 <Th>Answered by</Th>
-                <Th />
+                <Th className="w-[1%] text-right">Actions</Th>
               </tr>
             </thead>
             <tbody>
               {pageRows.map((number) => (
-                <tr key={number.sid}>
-                  <Td>
+                <tr key={number.sid} className="align-top">
+                  <Td className="whitespace-nowrap">
                     <Mono>{number.phoneNumber}</Mono>
                     <div className="text-xs text-muted">
                       {number.friendlyName}
@@ -173,7 +183,11 @@ export function OwnedNumbers({
                             <Badge tone="violet">Live on {platform}</Badge>
                           </div>
                         ) : (
-                          <div className="mt-1 text-xs text-warning-text">
+                          // An arbitrary webhook URL, and the one string here
+                          // that can be long enough to stretch the column on
+                          // its own. Capped and broken mid-word so it wraps
+                          // instead of widening the table.
+                          <div className="mt-1 max-w-[22rem] text-xs break-all text-warning-text">
                             Currently calls <Mono>{number.voiceUrl}</Mono>
                           </div>
                         );
@@ -182,8 +196,8 @@ export function OwnedNumbers({
                   <Td>
                     <AssignmentPicker number={number} agents={agents} />
                   </Td>
-                  <Td>
-                    <div className="flex flex-wrap justify-end gap-2">
+                  <Td className="whitespace-nowrap">
+                    <div className="flex justify-end gap-2">
                       {number.source === "external" ? (
                         <ActionButton
                           action={disconnectExternalNumberAction}
@@ -271,8 +285,14 @@ export function OwnedNumbers({
 }
 
 /**
- * The assignment dropdown. Submits on change rather than behind a Save button —
- * this is a single-field decision and the row already shows the result.
+ * The assignment dropdown, plus a Save that only lights up once the selection
+ * actually differs from what's stored — so the button says whether there is
+ * anything to save, instead of inviting a write that changes nothing.
+ *
+ * Controlled rather than `defaultValue`, which is what makes that comparison
+ * possible. `key` on the form resets the local selection when the server sends
+ * back a new assignment, so a saved row settles into its new value rather than
+ * showing a stale pending state.
  */
 function AssignmentPicker({
   number,
@@ -282,17 +302,30 @@ function AssignmentPicker({
   agents: { agent_id: string; name: string }[];
 }) {
   const [state, action, pending] = useActionState(assignNumber, IDLE);
+  const saved = number.assignedAgent?.agent_id ?? "";
+  const [selected, setSelected] = useState(saved);
+
+  // Adjusting state when a prop changes, per the React docs -- a save that
+  // succeeded arrives as a new `saved` value and the selection follows it.
+  const [lastSaved, setLastSaved] = useState(saved);
+  if (lastSaved !== saved) {
+    setLastSaved(saved);
+    setSelected(saved);
+  }
+
+  const dirty = selected !== saved;
 
   return (
-    <form action={action} className="space-y-1">
+    <form action={action} className="min-w-0 space-y-1.5">
       <input type="hidden" name="phone_number" value={number.phoneNumber} />
       <div className="flex items-center gap-2">
         <Dropdown
           name="agent_id"
-          defaultValue={number.assignedAgent?.agent_id ?? ""}
+          value={selected}
+          onValueChange={setSelected}
           ariaLabel={`Agent answering ${number.phoneNumber}`}
           disabled={pending}
-          className="sm:w-52"
+          className="w-full sm:w-56"
           options={[
             { value: "", label: "Unassigned" },
             ...agents.map((agent) => ({
@@ -301,17 +334,26 @@ function AssignmentPicker({
             })),
           ]}
         />
-        <Button type="submit" variant="secondary" disabled={pending}>
-          {pending ? "Saving…" : "Set"}
+        <Button
+          type="submit"
+          variant={dirty ? "primary" : "secondary"}
+          disabled={pending || !dirty}
+        >
+          {pending ? "Saving…" : "Save"}
         </Button>
       </div>
+      {/* Both of these are prose in a table cell, so they're capped: without a
+          max width they set the column's width and push the actions off the
+          edge, which is what clipped them mid-word before. */}
       {number.assignedAgent && number.assignedAgent.status !== "active" && (
-        <p className="text-xs text-warning-text">
+        <p className="max-w-sm text-xs leading-snug text-warning-text">
           Assigned agent is {number.assignedAgent.status} — it won&apos;t answer
           this number yet.
         </p>
       )}
-      <ActionMessage state={state} />
+      <div className="max-w-sm leading-snug">
+        <ActionMessage state={state} />
+      </div>
     </form>
   );
 }

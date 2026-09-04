@@ -138,7 +138,14 @@ export default async function NumbersPage() {
         </ErrorNotice>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Stacked, not side by side. These were in `lg:grid-cols-2`, which gave
+          each table half the viewport for four columns containing a phone
+          number, routing badges, an agent dropdown with a submit button, and
+          two destructive actions. The result was a permanent horizontal
+          scrollbar with the submit button clipped to "S" and the warning text
+          cut mid-word. Full width fixes it at the cause; nothing below needed
+          narrowing. */}
+      <div className="space-y-4">
         <CollapsibleCard
           title={`This Twilio account (${platformRows.length})`}
           description="Attach routes a number out through the shared trunk to LiveKit. The agent that answers is decided here, not in Twilio."
