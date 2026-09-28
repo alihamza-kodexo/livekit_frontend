@@ -64,14 +64,6 @@ export async function detachFromSharedTrunk(numberSid: string): Promise<void> {
 }
 
 /**
- * Permanently releases a number back to Twilio. Irreversible — the number
- * cannot be reclaimed, and anyone who calls it later reaches a stranger.
- */
-export async function releaseNumber(numberSid: string): Promise<void> {
-  await client().incomingPhoneNumbers(numberSid).remove();
-}
-
-/**
  * Connects a number from a customer's own Twilio account (their Account SID +
  * Auth Token), as opposed to buying one on the platform's own account.
  *

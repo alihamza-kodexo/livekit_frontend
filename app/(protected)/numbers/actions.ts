@@ -18,7 +18,6 @@ import {
   connectExternalNumber,
   detachFromSharedTrunk,
   disconnectExternalNumber,
-  releaseNumber,
 } from "@/lib/twilio";
 import { integrationStatus } from "@/lib/env";
 
@@ -260,38 +259,5 @@ export async function detachNumber(
     revalidatePath("/numbers");
     revalidatePath("/agents");
     return ok(`${phoneNumber} no longer routes to LiveKit.`);
-  });
-}
-
-/**
- * Permanently gives a number back to Twilio. Irreversible: the number goes back
- * into the pool and cannot be reclaimed.
- */
-export async function releaseNumberAction(
-  _prev: ActionState,
-  form: FormData,
-): Promise<ActionState> {
-  return guard(async () => {
-    const numberSid = str(form, "number_sid");
-    const phoneNumber = str(form, "phone_number");
-    if (!numberSid) return fail("Missing number SID.");
-
-    // Clear the Supabase assignment first. If the release then fails, the worst
-    // case is a live number nobody is routed to — the reverse ordering would
-    // leave an agent pointing at a number that no longer exists.
-    const { error } = await db()
-      .from("agents")
-      .update({ twilio_number: null })
-      .eq("twilio_number", phoneNumber);
-    if (error) return fail(`Could not clear the agent assignment: ${error.message}`);
-
-    if (integrationStatus().livekit && isE164(phoneNumber)) {
-      await removeNumberFromTrunks(phoneNumber);
-    }
-    await releaseNumber(numberSid);
-
-    revalidatePath("/numbers");
-    revalidatePath("/agents");
-    return ok(`Released ${phoneNumber} back to Twilio.`);
   });
 }

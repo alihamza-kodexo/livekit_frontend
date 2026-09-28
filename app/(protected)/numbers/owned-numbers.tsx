@@ -7,7 +7,6 @@ import {
   attachNumber,
   detachNumber,
   disconnectExternalNumberAction,
-  releaseNumberAction,
 } from "@/app/(protected)/numbers/actions";
 import { Dropdown } from "@/components/dropdown";
 import { ActionButton, ActionMessage } from "@/components/form";
@@ -207,47 +206,35 @@ export function OwnedNumbers({
                           hidden={{ external_number_id: number.externalNumberId }}
                         />
                       ) : (
-                        <>
-                          {number.onSharedTrunk ? (
-                            <ActionButton
-                              action={detachNumber}
-                              label="Detach"
-                              confirm={`Stop routing ${number.phoneNumber} to LiveKit? Callers will stop reaching the agent, and any agent assignment is cleared. You keep the number.`}
-                              hidden={{
-                                number_sid: number.sid,
-                                phone_number: number.phoneNumber,
-                              }}
-                            />
-                          ) : (
-                            <ActionButton
-                              action={attachNumber}
-                              label="Attach"
-                              variant="primary"
-                              confirm={
-                                number.voiceUrl
-                                  ? `${number.phoneNumber} is currently live on ${
-                                      externalVoicePlatform(number.voiceUrl) ??
-                                      number.voiceUrl
-                                    }. Attaching it to the shared trunk overrides that immediately -- Twilio ignores a number's Voice URL once it's on a trunk, so whatever answers it today stops receiving calls the moment you confirm. Continue?`
-                                  : undefined
-                              }
-                              hidden={{
-                                number_sid: number.sid,
-                                phone_number: number.phoneNumber,
-                              }}
-                            />
-                          )}
+                        number.onSharedTrunk ? (
                           <ActionButton
-                            action={releaseNumberAction}
-                            label="Release"
-                            variant="danger"
-                            confirm={`Release ${number.phoneNumber} back to Twilio? This is permanent — the number returns to the public pool and cannot be reclaimed.`}
+                            action={detachNumber}
+                            label="Detach"
+                            confirm={`Stop routing ${number.phoneNumber} to LiveKit? Callers will stop reaching the agent, and any agent assignment is cleared. You keep the number.`}
                             hidden={{
                               number_sid: number.sid,
                               phone_number: number.phoneNumber,
                             }}
                           />
-                        </>
+                        ) : (
+                          <ActionButton
+                            action={attachNumber}
+                            label="Attach"
+                            variant="primary"
+                            confirm={
+                              number.voiceUrl
+                                ? `${number.phoneNumber} is currently live on ${
+                                    externalVoicePlatform(number.voiceUrl) ??
+                                    number.voiceUrl
+                                  }. Attaching it to the shared trunk overrides that immediately -- Twilio ignores a number's Voice URL once it's on a trunk, so whatever answers it today stops receiving calls the moment you confirm. Continue?`
+                                : undefined
+                            }
+                            hidden={{
+                              number_sid: number.sid,
+                              phone_number: number.phoneNumber,
+                            }}
+                          />
+                        )
                       )}
                     </div>
                   </Td>
