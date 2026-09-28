@@ -156,14 +156,14 @@ export function OwnedNumbers({
             </thead>
             <tbody>
               {pageRows.map((number) => (
-                <tr key={number.sid} className="align-top">
-                  <Td className="whitespace-nowrap">
+                <tr key={number.sid}>
+                  <Td className="align-top whitespace-nowrap">
                     <Mono>{number.phoneNumber}</Mono>
                     <div className="text-xs text-muted">
                       {number.friendlyName}
                     </div>
                   </Td>
-                  <Td>
+                  <Td className="align-top">
                     {number.source === "external" ? (
                       <Badge tone="green">connected (own trunk)</Badge>
                     ) : number.onSharedTrunk ? (
@@ -193,10 +193,10 @@ export function OwnedNumbers({
                         );
                       })()}
                   </Td>
-                  <Td>
+                  <Td className="align-top">
                     <AssignmentPicker number={number} agents={agents} />
                   </Td>
-                  <Td className="whitespace-nowrap">
+                  <Td className="align-top whitespace-nowrap">
                     <div className="flex justify-end gap-2">
                       {number.source === "external" ? (
                         <ActionButton
@@ -316,16 +316,19 @@ function AssignmentPicker({
   const dirty = selected !== saved;
 
   return (
-    <form action={action} className="min-w-0 space-y-1.5">
+    <form action={action} className="min-w-0 max-w-md space-y-1.5">
       <input type="hidden" name="phone_number" value={number.phoneNumber} />
-      <div className="flex items-center gap-2">
+      {/* Wraps rather than overflowing: below roughly 380px the trigger and
+          Save stop fitting side by side, and a row that overflows is a row
+          whose Save button you can't reach. */}
+      <div className="flex flex-wrap items-center gap-2">
         <Dropdown
           name="agent_id"
           value={selected}
           onValueChange={setSelected}
           ariaLabel={`Agent answering ${number.phoneNumber}`}
           disabled={pending}
-          className="w-full sm:w-56"
+          className="min-w-0 flex-1 basis-48"
           options={[
             { value: "", label: "Unassigned" },
             ...agents.map((agent) => ({
@@ -338,20 +341,21 @@ function AssignmentPicker({
           type="submit"
           variant={dirty ? "primary" : "secondary"}
           disabled={pending || !dirty}
+          className="shrink-0"
         >
           {pending ? "Saving…" : "Save"}
         </Button>
       </div>
-      {/* Both of these are prose in a table cell, so they're capped: without a
-          max width they set the column's width and push the actions off the
-          edge, which is what clipped them mid-word before. */}
+      {/* Both of these are prose in a table cell. The form's own max width is
+          what stops them setting the column width and pushing the actions off
+          the edge, which is what clipped them mid-word before. */}
       {number.assignedAgent && number.assignedAgent.status !== "active" && (
-        <p className="max-w-sm text-xs leading-snug text-warning-text">
+        <p className="text-xs leading-snug text-warning-text">
           Assigned agent is {number.assignedAgent.status} — it won&apos;t answer
           this number yet.
         </p>
       )}
-      <div className="max-w-sm leading-snug">
+      <div className="leading-snug">
         <ActionMessage state={state} />
       </div>
     </form>

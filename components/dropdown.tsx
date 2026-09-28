@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { ToolTypeGlyph, type GlyphTone } from "@/components/ui";
 
@@ -27,6 +36,43 @@ const TRIGGER_TONES: Record<DropdownTone, string> = {
   red: "border-error-border bg-error-bg font-semibold text-error-text",
 };
 
+/** Viewport coordinates for the portaled menu. Exactly one of `top`/`bottom`
+ * and one of `left`/`right` is set -- which, depends on where the menu fits. */
+type MenuPosition = {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+  minWidth: number;
+  maxHeight: number;
+  placement: "bottom" | "top";
+};
+
+/** Gap between trigger and menu, and the margin kept clear of the window edge
+ * so a menu never sits flush against it. */
+const MENU_GAP = 4;
+const VIEWPORT_MARGIN = 8;
+/** Matches the old `max-h-72`. The menu never grows past this, even given room. */
+const MENU_MAX_HEIGHT = 288;
+
+/** Nothing to subscribe to -- `useIsClient` only wants the two snapshots. */
+const NEVER_CHANGES = () => () => {};
+const onClient = () => true;
+const onServer = () => false;
+
+/** False while rendering on the server, true once hydrated. The portal needs
+ * `document`, which only exists on the client. `useSyncExternalStore` rather
+ * than a mount effect: it takes a server snapshot directly instead of setting
+ * state from an effect and cascading a second render. */
+function useIsClient() {
+  return useSyncExternalStore(NEVER_CHANGES, onClient, onServer);
+}
+
+/** Keeps an offset at least `VIEWPORT_MARGIN` from either window edge. */
+function clamp(offset: number, max: number) {
+  return Math.max(VIEWPORT_MARGIN, Math.min(offset, max));
+}
+
 function cx(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
@@ -48,6 +94,15 @@ function cx(...classes: (string | false | null | undefined)[]) {
  * `.dropdown-menu` in globals.css. The list is always in the DOM and toggles
  * `display` as part of the transition, which is what lets the closing direction
  * animate too.
+ *
+ * The list is rendered into `document.body` rather than beside the trigger. An
+ * absolutely positioned menu is clipped by any ancestor that scrolls or hides
+ * its overflow, and two of ours do -- `Card` is `overflow-hidden` and `Table`
+ * is `overflow-x-auto` -- which inside a table cell left the menu sliced off
+ * mid-list. It was also painted over by the sticky agent header, which starts
+ * its own stacking context. A portal to the body has neither problem: position
+ * is measured from the trigger and kept in sync while open, including flipping
+ * above the trigger when the list would run off the bottom.
  */
 export function Dropdown({
   name,
@@ -88,8 +143,14 @@ export function Dropdown({
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
+
+  // Where the portaled menu sits, in viewport coordinates. Null until measured.
+  const [position, setPosition] = useState<MenuPosition | null>(null);
+  // The portal waits for the client; see `useIsClient`.
+  const isClient = useIsClient();
 
   const controlled = value !== undefined;
   const selectedValue = controlled ? value : internalValue;
@@ -110,11 +171,75 @@ export function Dropdown({
     setOpen(true);
   }
 
-  // Click-outside and Escape, only while open.
+  const measure = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    // The menu is at least as wide as its trigger, but its content can make it
+    // wider -- so measure the rendered menu when there is one to measure.
+    const width = Math.max(rect.width, listRef.current?.offsetWidth ?? 0);
+
+    const below = window.innerHeight - rect.bottom - MENU_GAP - VIEWPORT_MARGIN;
+    const above = rect.top - MENU_GAP - VIEWPORT_MARGIN;
+    // Flip only when below is genuinely cramped AND above is roomier, so the
+    // menu doesn't swap sides over a few pixels as the page scrolls.
+    const flip = below < Math.min(MENU_MAX_HEIGHT, 160) && above > below;
+
+    setPosition({
+      ...(flip
+        ? { bottom: window.innerHeight - rect.top + MENU_GAP }
+        : { top: rect.bottom + MENU_GAP }),
+      // Pinning the edge the menu is aligned to keeps it attached to the
+      // trigger even when it turns out wider than the trigger itself. Both
+      // edges are then clamped into the window, which matters when the trigger
+      // is itself partly scrolled out of view -- inside the numbers table it
+      // can be, and a menu that simply followed it would hang off the side.
+      ...(align === "end"
+        ? {
+            right: clamp(
+              window.innerWidth - rect.right,
+              window.innerWidth - VIEWPORT_MARGIN - width,
+            ),
+          }
+        : {
+            left: clamp(rect.left, window.innerWidth - VIEWPORT_MARGIN - width),
+          }),
+      minWidth: rect.width,
+      maxHeight: Math.max(120, Math.min(MENU_MAX_HEIGHT, flip ? above : below)),
+      placement: flip ? "top" : "bottom",
+    });
+  }, [align]);
+
+  // Before paint, so the menu is never shown at a stale position for a frame.
+  useLayoutEffect(() => {
+    if (!open) return;
+    measure();
+  }, [open, measure, options.length]);
+
+  // A fixed menu doesn't travel with its trigger, so anything that moves the
+  // trigger has to move the menu too. Capture phase, because the trigger may
+  // sit inside a scrolling container (the numbers table) and not the window.
+  useEffect(() => {
+    if (!open) return;
+    const sync = () => measure();
+    window.addEventListener("scroll", sync, true);
+    window.addEventListener("resize", sync);
+    return () => {
+      window.removeEventListener("scroll", sync, true);
+      window.removeEventListener("resize", sync);
+    };
+  }, [open, measure]);
+
+  // Click-outside and Escape, only while open. The menu is portaled out of the
+  // container, so it needs checking separately -- otherwise dragging its own
+  // scrollbar reads as a click outside and closes it.
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (listRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
@@ -187,11 +312,89 @@ export function Dropdown({
     }
   }
 
+  // Always rendered once mounted; `.dropdown-menu` animates both directions,
+  // including the discrete display change. Portaled to the body so no
+  // scrolling, overflow-hidden or stacking-context ancestor can clip it.
+  const menu = isClient
+    ? createPortal(
+        <div
+          ref={listRef}
+          id={listboxId}
+          role="listbox"
+          aria-label={ariaLabel}
+          tabIndex={-1}
+          data-open={open}
+          data-placement={position?.placement ?? "bottom"}
+          style={{
+            top: position?.top,
+            bottom: position?.bottom,
+            left: position?.left,
+            right: position?.right,
+            minWidth: position?.minWidth,
+            maxHeight: position?.maxHeight,
+          }}
+          className={cx(
+            // Clamped to the viewport so a menu wider than its trigger (or
+            // one aligned to the right edge) can't run off a phone screen.
+            "dropdown-menu fixed z-[70] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-lg",
+            menuClassName,
+          )}
+        >
+          {options.map((option, index) => {
+            const isSelected = option.value === selectedValue;
+            const isActive = index === activeIndex;
+            return (
+              <div
+                key={option.value}
+                data-option
+                role="option"
+                aria-selected={isSelected}
+                aria-disabled={option.disabled}
+                onMouseEnter={() => setActiveIndex(index)}
+                // mousedown, not click: the trigger's blur would otherwise race
+                // the selection on some browsers.
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  if (!option.disabled) commit(option.value);
+                }}
+                className={cx(
+                  "flex cursor-pointer items-start gap-2 rounded-sm px-2.5 py-2 text-sm",
+                  option.disabled && "cursor-not-allowed opacity-50",
+                  isActive && !option.disabled && "bg-canvas-alt",
+                  isSelected ? "font-semibold text-strong" : "text-body",
+                )}
+              >
+                <CheckIcon visible={isSelected} />
+                {option.icon && (
+                  // Nudged down so it lines up with the label's cap height rather
+                  // than the row's top edge, since rows can be two lines tall.
+                  <ToolTypeGlyph icon={option.icon} tone={option.iconTone} size="sm" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{option.label}</span>
+                  {option.description && (
+                    <span className="mt-0.5 block text-xs leading-snug text-muted">
+                      {option.description}
+                    </span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+          {options.length === 0 && (
+            <p className="px-2.5 py-2 text-sm text-faint">Nothing to choose from.</p>
+          )}
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
     <div ref={containerRef} className={cx("relative", className)}>
       {name && <input type="hidden" name={name} value={selectedValue} />}
 
       <button
+        ref={triggerRef}
         type="button"
         id={id}
         disabled={disabled}
@@ -221,68 +424,7 @@ export function Dropdown({
         <ChevronIcon open={open} />
       </button>
 
-      {/* Always rendered; `.dropdown-menu` handles both directions of the
-          animation, including the discrete display change. */}
-      <div
-        ref={listRef}
-        id={listboxId}
-        role="listbox"
-        aria-label={ariaLabel}
-        tabIndex={-1}
-        data-open={open}
-        className={cx(
-          // Clamped to the viewport so a menu wider than its trigger (or one
-          // aligned to the right edge) can't run off a phone screen.
-          "dropdown-menu absolute z-50 mt-1 max-h-72 max-w-[calc(100vw-2rem)] min-w-full overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-lg",
-          align === "end" ? "right-0" : "left-0",
-          menuClassName,
-        )}
-      >
-        {options.map((option, index) => {
-          const isSelected = option.value === selectedValue;
-          const isActive = index === activeIndex;
-          return (
-            <div
-              key={option.value}
-              data-option
-              role="option"
-              aria-selected={isSelected}
-              aria-disabled={option.disabled}
-              onMouseEnter={() => setActiveIndex(index)}
-              // mousedown, not click: the trigger's blur would otherwise race
-              // the selection on some browsers.
-              onMouseDown={(event) => {
-                event.preventDefault();
-                if (!option.disabled) commit(option.value);
-              }}
-              className={cx(
-                "flex cursor-pointer items-start gap-2 rounded-sm px-2.5 py-2 text-sm",
-                option.disabled && "cursor-not-allowed opacity-50",
-                isActive && !option.disabled && "bg-canvas-alt",
-                isSelected ? "font-semibold text-strong" : "text-body",
-              )}
-            >
-              <CheckIcon visible={isSelected} />
-              {option.icon && (
-                // Nudged down so it lines up with the label's cap height rather
-                // than the row's top edge, since rows can be two lines tall.
-                <ToolTypeGlyph icon={option.icon} tone={option.iconTone} size="sm" />
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate">{option.label}</span>
-                {option.description && (
-                  <span className="mt-0.5 block text-xs leading-snug text-muted">
-                    {option.description}
-                  </span>
-                )}
-              </span>
-            </div>
-          );
-        })}
-        {options.length === 0 && (
-          <p className="px-2.5 py-2 text-sm text-faint">Nothing to choose from.</p>
-        )}
-      </div>
+      {menu}
     </div>
   );
 }

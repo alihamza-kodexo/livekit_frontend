@@ -794,7 +794,16 @@ export function Th({ children, className }: ComponentProps<"th">) {
 export function Td({ children, className }: ComponentProps<"td">) {
   return (
     <td
-      className={cx("border-b border-divider px-3 py-3 align-middle", className)}
+      className={cx(
+        "border-b border-divider px-3 py-3",
+        // Middle by default, but a row with one tall cell wants everything
+        // lined up at the top instead. `cx` concatenates rather than merging,
+        // and Tailwind emits `align-middle` after `align-top`, so a caller's
+        // override would lose on source order -- hence dropping the default
+        // when one was passed rather than trusting class order.
+        /(^|\s)align-/.test(className ?? "") ? undefined : "align-middle",
+        className,
+      )}
     >
       {children}
     </td>
