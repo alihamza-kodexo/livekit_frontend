@@ -366,6 +366,13 @@ export type CallLog = {
    * in a way nothing claimed — which is "we don't know", not any of the actors.
    */
   ended_by: EndedBy | null;
+  /**
+   * What became of this call's Slack notification, recorded when the call ended
+   * rather than inferred later from the agent's current toggle — see migration
+   * 0028. Null on rows written before that, and on a teardown that died before
+   * the notify step; that is "no answer recorded", not "nothing was sent".
+   */
+  slack_notification: SlackNotification | null;
   end_reason: string | null;
   call_summary: string | null;
   /** Empty array = the analysis ran and found nothing substantive. Null = it
@@ -410,6 +417,68 @@ export const ENDED_BY_LABELS: Record<EndedBy, string> = {
   system: "System",
   telephony: "Line dropped",
   unknown: "Unknown",
+};
+
+/** What became of a call's Slack notification. Mirrors `SlackNotification` in
+ * agent-worker/src/worker/models.py and the check constraint in migration 0028
+ * — keep all three in step. */
+export const SLACK_NOTIFICATIONS = [
+  "lead_alert",
+  "transfer_failure_alert",
+  "skipped_test",
+  "skipped_agent_off",
+  "skipped_no_lead",
+  "skipped_no_webhook",
+  "failed",
+] as const;
+export type SlackNotification = (typeof SLACK_NOTIFICATIONS)[number];
+
+/** How each outcome reads to a person, and whether it is good news.
+ *
+ * "sent" and "skipped" are not the only two states worth distinguishing. An
+ * agent switched off is somebody's decision; no lead captured is the system
+ * working as designed; a missing webhook or a failed post is a fault. The tone
+ * separates the third group from the first two, because only it needs acting
+ * on. */
+export const SLACK_NOTIFICATION_LABELS: Record<
+  SlackNotification,
+  { label: string; detail: string; tone: "green" | "neutral" | "red" }
+> = {
+  lead_alert: {
+    label: "Lead alert sent",
+    detail: "Posted to Slack",
+    tone: "green",
+  },
+  transfer_failure_alert: {
+    label: "Transfer alert sent",
+    detail: "Posted to Slack — a callback is owed",
+    tone: "green",
+  },
+  skipped_test: {
+    label: "Not sent",
+    detail: "Test session, so no alert was posted",
+    tone: "neutral",
+  },
+  skipped_agent_off: {
+    label: "Not sent",
+    detail: "This agent's Slack notifications were off at the time",
+    tone: "neutral",
+  },
+  skipped_no_lead: {
+    label: "Not sent",
+    detail: "No lead details were captured on this call",
+    tone: "neutral",
+  },
+  skipped_no_webhook: {
+    label: "Could not send",
+    detail: "SLACK_WEBHOOK_URL is not set on the worker — no agent can notify",
+    tone: "red",
+  },
+  failed: {
+    label: "Send failed",
+    detail: "Slack was called and returned an error",
+    tone: "red",
+  },
 };
 
 /** One priced row of a call's cost, as written by pricing.py's `LineItem`. */

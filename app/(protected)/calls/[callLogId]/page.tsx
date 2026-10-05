@@ -19,7 +19,7 @@ import {
   Timestamp,
 } from "@/components/ui";
 import { getAgent, getCallLog } from "@/lib/queries";
-import { ENDED_BY_LABELS } from "@/lib/types";
+import { ENDED_BY_LABELS, SLACK_NOTIFICATION_LABELS } from "@/lib/types";
 
 const COMPONENT_LABELS: Record<string, string> = {
   stt: "Speech-to-text",
@@ -217,6 +217,30 @@ export default async function CallDetailPage({
                 : call.callback_needed
                   ? "Yes"
                   : "No"}
+            </Detail>
+            <Detail label="Slack">
+              {call.slack_notification ? (
+                <span className="flex flex-col gap-0.5">
+                  <span
+                    className={
+                      SLACK_NOTIFICATION_LABELS[call.slack_notification].tone ===
+                      "red"
+                        ? "text-error-text"
+                        : undefined
+                    }
+                  >
+                    {SLACK_NOTIFICATION_LABELS[call.slack_notification].label}
+                  </span>
+                  <span className="text-xs text-faint">
+                    {SLACK_NOTIFICATION_LABELS[call.slack_notification].detail}
+                  </span>
+                </span>
+              ) : (
+                // Not "nothing was sent" — this call predates the column, or
+                // its teardown died before the notify step ran. Saying which
+                // matters, because the two look identical from the channel.
+                <span className="text-faint">not recorded</span>
+              )}
             </Detail>
           </dl>
 
