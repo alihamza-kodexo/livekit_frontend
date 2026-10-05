@@ -85,6 +85,7 @@ export function CallFilters({
           id="filter-agent"
           value={draft.agent}
           onValueChange={set("agent")}
+          clearable
           options={[
             { value: "", label: "All agents" },
             ...agents.map((agent) => ({
@@ -100,6 +101,7 @@ export function CallFilters({
           id="filter-outcome"
           value={draft.outcome}
           onValueChange={set("outcome")}
+          clearable
           options={[
             { value: "", label: "All outcomes" },
             ...CALL_OUTCOMES.map((outcome) => ({

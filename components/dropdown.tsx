@@ -118,6 +118,7 @@ export function Dropdown({
   className,
   menuClassName,
   align = "start",
+  clearable = false,
 }: {
   /** Omit for a dropdown that only drives local state. */
   name?: string;
@@ -137,6 +138,15 @@ export function Dropdown({
   menuClassName?: string;
   /** Which edge the menu lines up with when it's wider than the trigger. */
   align?: "start" | "end";
+  /** Lets the selected row be clicked again to clear the selection back to "",
+   * and marks it with a cross so that's visible rather than guessed at.
+   *
+   * Off by default, and deliberately: most dropdowns here have no meaningful
+   * empty state -- an agent's status or voice is always *something*, and
+   * offering to unset it would offer a value the form can't save. Filters are
+   * the opposite case, where "" already means "all" and is the one value the
+   * list can't otherwise get back to in one click. */
+  clearable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [internalValue, setInternalValue] = useState(defaultValue ?? "");
@@ -155,6 +165,17 @@ export function Dropdown({
   const controlled = value !== undefined;
   const selectedValue = controlled ? value : internalValue;
   const selected = options.find((option) => option.value === selectedValue);
+
+  /** What picking row `index` does. Clearable turns a second pick of the row
+   * that's already selected into a clear, which is why mouse and keyboard both
+   * go through here rather than each calling commit with the row's own value. */
+  function choose(index: number) {
+    const option = options[index];
+    if (!option || option.disabled) return;
+    const clears =
+      clearable && option.value !== "" && option.value === selectedValue;
+    commit(clears ? "" : option.value);
+  }
 
   function commit(next: string) {
     if (!controlled) setInternalValue(next);
@@ -298,9 +319,7 @@ export function Dropdown({
           openMenu();
           return;
         }
-        if (activeIndex >= 0 && !options[activeIndex]?.disabled) {
-          commit(options[activeIndex].value);
-        }
+        if (activeIndex >= 0) choose(activeIndex);
         return;
       case "Tab":
         // Leaving the control commits nothing and closes -- same as a native
@@ -355,7 +374,7 @@ export function Dropdown({
                 // the selection on some browsers.
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  if (!option.disabled) commit(option.value);
+                  choose(index);
                 }}
                 className={cx(
                   "flex cursor-pointer items-start gap-2 rounded-sm px-2.5 py-2 text-sm",
@@ -378,6 +397,15 @@ export function Dropdown({
                     </span>
                   )}
                 </span>
+                {/* Decorative, not a second button: the row is already the
+                  control, and nesting something clickable inside a role=option
+                    would give screen readers a target that isn't one. Always
+                    shown rather than on hover, since hover doesn't exist on a
+                    touch screen and this is the only hint that the row does
+                    something different the second time. */}
+                {clearable && isSelected && option.value !== "" && (
+                  <ClearIcon />
+                )}
               </div>
             );
           })}
@@ -445,6 +473,25 @@ function ChevronIcon({ open }: { open: boolean }) {
       )}
     >
       <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+/** Shown on the selected row of a `clearable` dropdown, to say that clicking
+ * it again removes the selection rather than re-applying it. */
+function ClearIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint"
+    >
+      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   );
 }
