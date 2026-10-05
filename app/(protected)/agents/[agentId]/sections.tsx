@@ -208,8 +208,8 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
         <Field
           label="Slack notifications"
           htmlFor="slack-notifications-enabled"
-          badge="off by default"
-          hint="Posts to Slack when a call captures lead details — a name, company or what they need — and when a transfer fails and someone owes the caller a callback. Nothing else: spam, wrong numbers and calls that dropped early stay in the call log without becoming a message. Needs SLACK_WEBHOOK_URL set on the worker as well; if that's missing, nothing arrives even with this on."
+          badge="on by default"
+          hint="Posts to Slack when a call captures lead details — a name, company or what they need — and when a transfer fails and someone owes the caller a callback. Nothing else: spam, wrong numbers and calls that dropped early stay in the call log without becoming a message. Untick it for an agent that should stay quiet; it will stay off. Needs SLACK_WEBHOOK_URL set on the worker as well; if that's missing, nothing arrives even with this on."
         >
           <label className="flex items-center gap-2 text-sm">
             <Checkbox

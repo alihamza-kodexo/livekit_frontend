@@ -181,8 +181,10 @@ export type Agent = {
    * agent-worker's notify.send_end_call_webhook. */
   end_call_webhook_url: string | null;
   /**
-   * Whether this agent posts to Slack at all. Off by default, including for
-   * agents created before the column existed — see migration 0026.
+   * Whether this agent posts to Slack at all. On by default as of migration
+   * 0027, which reversed 0026's opt-in default after a real lead went
+   * unannounced for a week on an agent nobody had switched on. Untick it for
+   * an agent that should stay quiet and it stays off.
    *
    * When on, the agent posts a lead alert for calls where lead details were
    * captured, plus the urgent alert when a transfer fails. It never posts a
