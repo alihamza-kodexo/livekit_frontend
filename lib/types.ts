@@ -424,6 +424,7 @@ export const ENDED_BY_LABELS: Record<EndedBy, string> = {
  * — keep all three in step. */
 export const SLACK_NOTIFICATIONS = [
   "lead_alert",
+  "transfer_alert",
   "transfer_failure_alert",
   "skipped_test",
   "skipped_agent_off",
@@ -449,9 +450,14 @@ export const SLACK_NOTIFICATION_LABELS: Record<
     detail: "Posted to Slack",
     tone: "green",
   },
-  transfer_failure_alert: {
+  transfer_alert: {
     label: "Transfer alert sent",
-    detail: "Posted to Slack — a callback is owed",
+    detail: "Posted to Slack — handed to a human, no details captured",
+    tone: "green",
+  },
+  transfer_failure_alert: {
+    label: "Transfer failure alert sent",
+    detail: "Posted to Slack — the transfer failed and a callback is owed",
     tone: "green",
   },
   skipped_test: {
@@ -466,7 +472,7 @@ export const SLACK_NOTIFICATION_LABELS: Record<
   },
   skipped_no_lead: {
     label: "Not sent",
-    detail: "No lead details were captured on this call",
+    detail: "No lead details captured, and the call wasn't transferred",
     tone: "neutral",
   },
   skipped_no_webhook: {
