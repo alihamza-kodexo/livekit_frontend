@@ -196,6 +196,20 @@ export type Agent = {
    * in Slack means the webhook is missing, not that the toggle failed.
    */
   slack_notifications_enabled: boolean;
+  /**
+   * Whether the agent is told the current date and time at the start of each
+   * call — see migration 0031. Off by default: it changes what every answer is
+   * reasoned from, and an agent that never discusses dates gains nothing.
+   *
+   * On, the worker also fills in date placeholders already written by hand into
+   * the prompt, the greeting or a tool description ({{today_date}}, {{now}},
+   * {{Present_year}}). Placeholders it doesn't recognise are left visible,
+   * deliberately — a stray {{patient_name}} is a config mistake worth seeing.
+   */
+  current_time_enabled: boolean;
+  /** IANA name (Asia/Muscat, America/New_York), not an offset, so daylight
+   * saving is the tz database's problem. Null means UTC. */
+  timezone: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -504,6 +518,25 @@ export const SLACK_NOTIFICATION_LABELS: Record<
     tone: "red",
   },
 };
+
+/** Timezones offered in the dashboard. Deliberately a short list of the
+ * places this product operates rather than the whole IANA database, which is
+ * 300-odd entries and unscrollable in a dropdown. The column accepts any valid
+ * IANA name, so adding one here is the only change needed for a new office. */
+export const AGENT_TIMEZONES: { value: string; label: string }[] = [
+  { value: "UTC", label: "UTC" },
+  { value: "America/New_York", label: "New York (Eastern)" },
+  { value: "America/Chicago", label: "Chicago (Central)" },
+  { value: "America/Denver", label: "Denver (Mountain)" },
+  { value: "America/Los_Angeles", label: "Los Angeles (Pacific)" },
+  { value: "America/Toronto", label: "Toronto" },
+  { value: "Europe/London", label: "London" },
+  { value: "Asia/Dubai", label: "Dubai" },
+  { value: "Asia/Muscat", label: "Muscat" },
+  { value: "Asia/Karachi", label: "Karachi" },
+  { value: "Australia/Melbourne", label: "Melbourne" },
+  { value: "Australia/Sydney", label: "Sydney" },
+];
 
 /** One priced row of a call's cost, as written by pricing.py's `LineItem`. */
 export type CostLine = {

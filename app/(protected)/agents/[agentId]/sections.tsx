@@ -27,6 +27,7 @@ import {
   ToolTypeGlyph,
 } from "@/components/ui";
 import { VoicePicker } from "@/components/voice-picker";
+import { AGENT_TIMEZONES } from "@/lib/types";
 import type { Agent, FirstMessageMode, LLMProvider, Tool } from "@/lib/types";
 import {
   BUILTIN_TOOLS,
@@ -205,6 +206,41 @@ export function CoreConfigForm({ agent }: { agent: Agent }) {
             placeholder="https://n8n.example.com/webhook/call-ended"
           />
         </Field>
+        <Field
+          label="Knows today's date"
+          htmlFor="current-time-enabled"
+          badge="off by default"
+          hint="Tells the agent the date, weekday and time at the start of every call, in the timezone below. Without it the model has no clock — it will ask the caller what day it is, or agree to 'Tuesday the 10th' without being able to check that the 10th is a Tuesday. Turn it on for anything that books, schedules or quotes a deadline. It also fills in date placeholders you've written by hand, like {{today_date}} or {{now}}, in the prompt, the greeting and your tool descriptions."
+        >
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox
+              id="current-time-enabled"
+              name="current_time_enabled"
+              defaultChecked={agent.current_time_enabled}
+              className="mt-0.5"
+            />
+            Tell this agent the current date and time
+          </label>
+        </Field>
+
+        <Field
+          label="Timezone"
+          htmlFor="agent-timezone"
+          hint="Which clock the agent reads. Only used when the setting above is on. It matters more than it looks: at 20:30 UTC it is already Tuesday in Muscat and still Monday in New York, so an agent on the wrong zone books the wrong day every evening."
+        >
+          <Dropdown
+            id="agent-timezone"
+            name="timezone"
+            defaultValue={agent.timezone ?? "UTC"}
+            className="sm:w-72"
+            options={AGENT_TIMEZONES.map((zone) => ({
+              value: zone.value,
+              label: zone.label,
+              description: zone.value,
+            }))}
+          />
+        </Field>
+
         <Field
           label="Slack notifications"
           htmlFor="slack-notifications-enabled"

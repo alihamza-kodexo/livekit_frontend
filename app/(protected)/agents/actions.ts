@@ -26,7 +26,12 @@ import type {
   PronunciationEntry,
   QualificationCriterion,
 } from "@/lib/types";
-import { AGENT_STATUSES, FIRST_MESSAGE_MODES, LLM_PROVIDERS } from "@/lib/types";
+import {
+  AGENT_STATUSES,
+  AGENT_TIMEZONES,
+  FIRST_MESSAGE_MODES,
+  LLM_PROVIDERS,
+} from "@/lib/types";
 
 /**
  * An agent can be switched to "active" with an LLM provider whose API key
@@ -182,6 +187,12 @@ export async function updateAgentCore(
       .find((key, i, all) => all.indexOf(key) !== i);
     if (duplicate) return fail(`Duplicate qualification key "${duplicate}".`);
 
+    const currentTimeEnabled = bool(form, "current_time_enabled");
+    const timezone = optionalStr(form, "timezone");
+    if (currentTimeEnabled && timezone && !AGENT_TIMEZONES.some((z) => z.value === timezone)) {
+      return fail("Pick a timezone from the list.");
+    }
+
     const endCallWebhookUrl = optionalStr(form, "end_call_webhook_url");
     if (endCallWebhookUrl && !/^https?:\/\//.test(endCallWebhookUrl)) {
       return fail("End-call webhook URL must start with http:// or https://.");
@@ -199,6 +210,10 @@ export async function updateAgentCore(
         end_call_instructions: optionalStr(form, "end_call_instructions"),
         end_call_webhook_url: endCallWebhookUrl,
         slack_notifications_enabled: bool(form, "slack_notifications_enabled"),
+        current_time_enabled: currentTimeEnabled,
+        // Only stored when the clock is on -- a timezone on an agent that
+        // never reads one is a setting that looks effective and isn't.
+        timezone: currentTimeEnabled ? timezone : null,
       })
       .eq("agent_id", agentId);
 
