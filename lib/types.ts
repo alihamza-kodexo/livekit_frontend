@@ -276,6 +276,24 @@ export type Tool = {
   detector_statements: string[];
   /** Detector types only. Null means "use the agent's own llm_provider". */
   detector_llm: DetectorLLM | null;
+  /**
+   * Function tools only — see migration 0030. Together these decide what the
+   * caller experiences while the webhook runs.
+   *
+   * `wait_for_response` true (the default) awaits the webhook and hands its
+   * body to the model, which is what makes an n8n "Respond to Webhook" node
+   * answer the caller. False fires it and carries on, for a webhook that
+   * records something and has nothing to say back.
+   */
+  wait_for_response: boolean;
+  /** Null uses the worker's 15s default. Capped at 120 by a check constraint. */
+  timeout_seconds: number | null;
+  /** One phrase per line; a different one is used each time the agent has to
+   * fill, so a slow tool doesn't repeat itself. Null or blank says nothing. */
+  holding_phrase: string | null;
+  /** What the model is told when the webhook fails — an instruction about what
+   * to do instead, not a line read out. Null uses the worker's default. */
+  unavailable_message: string | null;
   created_at: string;
   updated_at: string;
 };

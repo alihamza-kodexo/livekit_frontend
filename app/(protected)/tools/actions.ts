@@ -44,6 +44,12 @@ export async function saveTool(
     let parameterSchema: Record<string, unknown> = {};
     let detectorStatements: string[] = [];
     let detectorLlm: DetectorLLM | null = null;
+    // Function tools only; left at their defaults for every other type so a
+    // Transfer tool can't end up carrying a holding phrase nothing reads.
+    let waitForResponse = true;
+    let timeoutSeconds: number | null = null;
+    let holdingPhrase: string | null = null;
+    let unavailableMessage: string | null = null;
 
     if (toolType === "function") {
       webhookUrl = optionalStr(form, "webhook_url");
@@ -68,6 +74,30 @@ export async function saveTool(
           `Parameter schema isn't valid JSON: ${error instanceof Error ? error.message : "parse error"}`,
         );
       }
+
+      waitForResponse = str(form, "wait_for_response") !== "false";
+
+      // Blank means "use the worker default", which is a real choice and not
+      // the same as 0 — so an empty box stays null rather than becoming a
+      // number. Validated here so a typo surfaces now and not to a caller.
+      const rawTimeout = optionalStr(form, "timeout_seconds");
+      if (rawTimeout) {
+        const parsed = Number(rawTimeout);
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > 120) {
+          return fail("Timeout must be a whole number of seconds between 1 and 120.");
+        }
+        timeoutSeconds = parsed;
+      }
+
+      // One phrase per line, blanks dropped — an empty line would make the
+      // agent fill a silence with silence.
+      const phrases = str(form, "holding_phrase")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      holdingPhrase = phrases.length ? phrases.join("\n") : null;
+
+      unavailableMessage = optionalStr(form, "unavailable_message");
     } else if (toolType === "transfer_call") {
       destinationNumber = optionalStr(form, "destination_number");
       if (!destinationNumber || !isE164(destinationNumber)) {
@@ -107,6 +137,10 @@ export async function saveTool(
       destination_number: destinationNumber,
       detector_statements: detectorStatements,
       detector_llm: detectorLlm,
+      wait_for_response: waitForResponse,
+      timeout_seconds: timeoutSeconds,
+      holding_phrase: holdingPhrase,
+      unavailable_message: unavailableMessage,
     };
 
     // is_builtin is set on create and never touched on update. Editing is the

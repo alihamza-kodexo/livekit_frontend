@@ -6,7 +6,14 @@ import { saveTool, deleteTool } from "@/app/(protected)/tools/actions";
 import { Dropdown } from "@/components/dropdown";
 import { ActionButton, ActionForm } from "@/components/form";
 import { ToolParameterBuilder } from "@/components/tool-parameter-builder";
-import { Field, Input, StaticValue, Textarea, ToolTypeGlyph } from "@/components/ui";
+import {
+  Checkbox,
+  Field,
+  Input,
+  StaticValue,
+  Textarea,
+  ToolTypeGlyph,
+} from "@/components/ui";
 import { DETECTOR_DEFAULTS } from "@/lib/detector-defaults";
 import { TOOL_TYPE_GLYPHS } from "@/lib/tool-display";
 import { isDetectorTool, type Tool, type ToolType } from "@/lib/types";
@@ -151,6 +158,24 @@ export function ToolForm({ tool }: { tool?: Tool }) {
             </Field>
           )}
 
+          {toolType === "function" && (
+            <Field
+              label="Timeout"
+              htmlFor={`tool-timeout-${suffix}`}
+              hint="Seconds to wait before giving up and telling the agent the tool is unavailable. Blank uses 15. Max 120 — past that the caller is being stranded, not served."
+            >
+              <Input
+                id={`tool-timeout-${suffix}`}
+                name="timeout_seconds"
+                type="number"
+                min={1}
+                max={120}
+                defaultValue={tool?.timeout_seconds ?? ""}
+                placeholder="15"
+              />
+            </Field>
+          )}
+
           {toolType === "transfer_call" && (
             <Field
               label="Destination number"
@@ -275,6 +300,74 @@ export function ToolForm({ tool }: { tool?: Tool }) {
             gets through (use the agent&apos;s end-call instructions for those); and it needs a
             speech-to-text transcript, so it does not work on agents running Gemini Live.
           </p>
+        </div>
+      )}
+
+      {toolType === "function" && (
+        <div className="space-y-5 rounded-lg border border-line bg-canvas-alt p-5">
+          <div>
+            <h3 className="font-heading text-sm font-semibold text-strong">
+              While the webhook runs
+            </h3>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">
+              By default the agent waits for the webhook and reads its
+              response back to the caller — this is what an n8n{" "}
+              <strong>Respond to Webhook</strong> node answers. The caller
+              hears nothing while it runs, so a slow tool wants a phrase to
+              fill the gap, and a tool with nothing to say back needn&apos;t
+              be waited for at all.
+            </p>
+          </div>
+
+          <Field label="Wait for the response" htmlFor={`tool-wait-${suffix}`}>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                id={`tool-wait-${suffix}`}
+                name="wait_for_response"
+                value="true"
+                defaultChecked={tool?.wait_for_response ?? true}
+                className="mt-0.5"
+              />
+              <span>
+                Hand the webhook&apos;s response to the agent to answer with
+                <span className="mt-0.5 block text-xs leading-snug text-muted">
+                  Untick for a webhook that records something and has
+                  nothing to say back — it fires and the conversation
+                  carries on immediately. A failure is logged rather than
+                  mentioned to the caller, because by then the agent has
+                  moved on.
+                </span>
+              </span>
+            </label>
+          </Field>
+
+          <Field
+            label="What to say while waiting"
+            htmlFor={`tool-holding-${suffix}`}
+            hint="One phrase per line; a different one is used each time, so a slow tool doesn't repeat itself. Only spoken once the call has been quiet for a moment — a webhook that answers quickly says none of these. Leave blank to say nothing."
+          >
+            <Textarea
+              id={`tool-holding-${suffix}`}
+              name="holding_phrase"
+              rows={3}
+              defaultValue={tool?.holding_phrase ?? ""}
+              placeholder={"Let me check that for you.\nStill looking…\nBear with me one moment."}
+            />
+          </Field>
+
+          <Field
+            label="If it fails or times out"
+            htmlFor={`tool-unavailable-${suffix}`}
+            hint="An instruction to the agent, not a line read out — so say what to do instead, not just that something broke. Blank uses a generic apology-and-offer-a-callback."
+          >
+            <Textarea
+              id={`tool-unavailable-${suffix}`}
+              name="unavailable_message"
+              rows={2}
+              defaultValue={tool?.unavailable_message ?? ""}
+              placeholder="Booking is down. Apologise, take their number and promise someone will call back today."
+            />
+          </Field>
         </div>
       )}
 
