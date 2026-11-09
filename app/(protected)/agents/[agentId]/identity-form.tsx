@@ -37,7 +37,7 @@ export function AgentIdentityForm({ agent }: { agent: Agent }) {
   const [status, setStatus] = useState<AgentStatus>(agent.status);
 
   return (
-    <div className="flex w-full flex-col gap-1 sm:w-auto sm:items-end">
+    <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">
       {/* Wraps, and the name field takes the slack -- three controls in a row
           is wider than a phone. */}
       <form
@@ -52,7 +52,7 @@ export function AgentIdentityForm({ agent }: { agent: Agent }) {
           required
           aria-label="Persona name"
           placeholder="Persona name"
-          className="min-w-0 flex-1 sm:w-40 sm:flex-none"
+          className="min-w-0 flex-1 sm:w-64 sm:flex-none"
         />
         <Dropdown
           name="status"
@@ -89,7 +89,7 @@ export function AgentIdentityForm({ agent }: { agent: Agent }) {
           than the button has -- constrained so it wraps near the button
           instead of stretching the full width of the header. */}
       {flash === "error" && (
-        <div className="w-full sm:max-w-[16rem] sm:text-right">
+        <div className="w-full sm:max-w-[16rem]">
           <ActionMessage state={state} />
         </div>
       )}

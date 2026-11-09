@@ -16,7 +16,6 @@ import {
   CollapsibleCard,
   Mono,
   PageBody,
-  PageHeader,
   TextLink,
 } from "@/components/ui";
 import { StickyBand } from "@/components/sticky-band";
@@ -57,38 +56,42 @@ export default async function AgentPage({
         publishHeightAs="--agent-header-h"
         // Negative margins have to track PageBody's own gutters at every
         // breakpoint, or the band stops covering the full content width.
-        className="z-10 -mx-4 bg-canvas px-4 pt-5 pb-4 sm:-mx-6 sm:px-6 sm:pt-6 lg:-mx-8 lg:px-8 lg:pt-7 lg:pb-5"
+        className="z-10 -mx-4 bg-canvas px-4 pt-3 pb-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
       >
-        <PageHeader
-          title={agent.name}
-          // The number this agent answers on is the one fact worth reading at a
-          // glance next to its name, so it sits with the title rather than in a
-          // separate strip further down the page.
-          meta={
-            <>
-              <span className="flex items-center gap-2">
-                <span className="mono-kicker">Number</span>
-                {agent.twilio_number ? (
-                  <Mono>{agent.twilio_number}</Mono>
-                ) : (
-                  <TextLink href="/numbers">assign one</TextLink>
-                )}
-              </span>
-              <TextLink href={`/calls?agent=${agent.agent_id}`}>
-                View calls
-              </TextLink>
-            </>
-          }
-          actions={
-            <>
-              <AgentIdentityForm agent={agent} />
-              <TestAgentPanelLoader
-                agentId={agent.agent_id}
-                agentName={agent.name}
-              />
-            </>
-          }
-        />
+        {/* Deliberately not PageHeader. That renders the name twice -- once as
+            a statement-face h1 and again in the editable field beside it --
+            and the h1 then has to share a row with four controls, so a name of
+            any length wraps to four tall lines and pushes the tabs off the
+            screen. The editable field IS the name here, so it carries it; the
+            h1 stays for the document outline and screen readers only. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line pb-3">
+          <h1 className="sr-only">{agent.name}</h1>
+
+          <AgentIdentityForm agent={agent} />
+
+          {/* Pushed to the far end so the editable controls stay grouped at the
+              start -- on a narrow screen it wraps to its own line instead. */}
+          <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <span className="flex items-center gap-1.5 text-sm">
+              <span className="mono-kicker">Number</span>
+              {agent.twilio_number ? (
+                <Mono>{agent.twilio_number}</Mono>
+              ) : (
+                <TextLink href="/numbers">assign one</TextLink>
+              )}
+            </span>
+            <TextLink
+              href={`/calls?agent=${agent.agent_id}`}
+              className="text-sm"
+            >
+              View calls
+            </TextLink>
+            <TestAgentPanelLoader
+              agentId={agent.agent_id}
+              agentName={agent.name}
+            />
+          </div>
+        </div>
       </StickyBand>
 
       <AgentModelSummary agent={agent} />
