@@ -1,0 +1,45 @@
+name: CI
+
+# Deployment is not here. The dashboard is hosted by a provider that builds
+# from the repository on its own, so adding a deploy step would mean two things
+# shipping the same commit and racing each other. What is missing without CI is
+# the check: the host builds whatever it is given, and a type error reaches
+# production as a broken page rather than a red tick.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck before lint before build, cheapest signal first: a type error
+      # shows in seconds, a Next build takes a couple of minutes to tell you the
+      # same thing less clearly.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Build
+        # The app reads Supabase, Twilio and LiveKit config at request time, not
+        # at build time, so a build needs no secrets. If that ever stops being
+        # true this step will fail loudly, which is the right way to find out.
+        run: npx next build
